@@ -3,6 +3,7 @@
 import {
   computeSegmentCoverage,
   computeIssueFrequency,
+  computeWeeklySummary,
   computeWeeklyUniqueCounts,
   summarizeFtnModes,
   getWeekDateKeys,
@@ -66,6 +67,15 @@ assert(issues.collisionDays === 2, "collision days count");
 assert(issues.seedOilDays === 1, "seed oil days count");
 assert(issues.highFatMealDays === 2, "high-fat meal days count");
 assert(issues.highFatDayDays === 1, "high-fat day toggle count");
+
+const summary = computeWeeklySummary({
+  logs,
+  rosters,
+  anchorDate: new Date("2026-01-13T12:00:00"),
+  weekStart: 1,
+  phase: ""
+});
+assert(Array.isArray(summary.correlations), "summary correlations array");
 
 const anchor = new Date("2026-01-13T12:00:00");
 const weekStart = getWeekStartDate(anchor, 1);

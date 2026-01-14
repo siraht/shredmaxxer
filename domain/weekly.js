@@ -1,6 +1,7 @@
 // @ts-check
 
 import { computeCoverageMatrix } from "./coverage.js";
+import { computeReviewCorrelations } from "./correlations.js";
 import { addDaysLocal, dateToKey } from "./time.js";
 
 /**
@@ -195,6 +196,7 @@ export function computeWeeklySummary(params){
   const coverage = computeSegmentCoverage(params.logs || {}, dateKeys);
   const matrix = computeCoverageMatrix(params.logs || {}, params.rosters, dateKeys);
   const issueFrequency = computeIssueFrequency(params.logs || {}, dateKeys, params.rosters);
+  const correlations = computeReviewCorrelations(params.logs || {}, params.rosters, dateKeys);
   const phaseLabel = getPhaseTargetLabel(params.phase || "");
   return {
     dateKeys,
@@ -203,6 +205,7 @@ export function computeWeeklySummary(params){
     coverage,
     matrix,
     issueFrequency,
+    correlations,
     phaseLabel
   };
 }
