@@ -54,7 +54,12 @@ export function getElements(){
     importMode: document.getElementById("importMode"),
     importApply: document.getElementById("importApply"),
     importStatus: document.getElementById("importStatus"),
+    diagStorageMode: document.getElementById("diagStorageMode"),
+    diagPersistStatus: document.getElementById("diagPersistStatus"),
+    diagAppVersion: document.getElementById("diagAppVersion"),
+    diagInstallId: document.getElementById("diagInstallId"),
     reviewRange: document.getElementById("reviewRange"),
+    reviewIssues: document.getElementById("reviewIssues"),
     coverageMatrix: document.getElementById("coverageMatrix"),
     rotationPicks: document.getElementById("rotationPicks"),
 

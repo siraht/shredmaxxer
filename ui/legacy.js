@@ -5,7 +5,7 @@ import { computeSegmentWindows } from "../domain/time.js";
 import { searchRosterItems } from "../domain/search.js";
 import { computeCoverageMatrix } from "../domain/coverage.js";
 import { computeRotationPicks } from "../domain/rotation.js";
-import { getWeekDateKeys } from "../domain/weekly.js";
+import { computeIssueFrequency, getWeekDateKeys } from "../domain/weekly.js";
 
 export function createLegacyUI(ctx){
   const { els, helpers, actions, defaults } = ctx;
@@ -685,6 +685,19 @@ export function createLegacyUI(ctx){
     return { collision, seedOil, highFat };
   }
 
+  function renderDiagnostics(){
+    if(!els.diagStorageMode) return;
+    const meta = getState().meta || {};
+    const setValue = (el, value) => {
+      if(!el) return;
+      el.textContent = value || "—";
+    };
+    setValue(els.diagStorageMode, meta.storageMode);
+    setValue(els.diagPersistStatus, meta.persistStatus);
+    setValue(els.diagAppVersion, meta.appVersion);
+    setValue(els.diagInstallId, meta.installId);
+  }
+
   function renderHistory(){
     const state = getState();
     const keys = Object.keys(state.logs).sort().reverse();
@@ -718,6 +731,8 @@ export function createLegacyUI(ctx){
         renderToday();
       });
     });
+
+    renderDiagnostics();
   }
 
   function renderReview(){
@@ -736,6 +751,17 @@ export function createLegacyUI(ctx){
       const start = dateKeys[0] || "—";
       const end = dateKeys[dateKeys.length - 1] || "—";
       els.reviewRange.textContent = `${start} → ${end}`;
+    }
+
+    if(els.reviewIssues){
+      const issues = computeIssueFrequency(state.logs || {}, dateKeys, state.rosters);
+      const totalDays = dateKeys.length || 0;
+      els.reviewIssues.innerHTML = `
+        <div class="issue-chip">Collision days: ${issues.collisionDays}/${totalDays}</div>
+        <div class="issue-chip">Seed‑oil days: ${issues.seedOilDays}/${totalDays}</div>
+        <div class="issue-chip">High‑fat meals: ${issues.highFatMealDays}/${totalDays}</div>
+        <div class="issue-chip">High‑fat day toggles: ${issues.highFatDayDays}/${totalDays}</div>
+      `;
     }
 
     const head = `

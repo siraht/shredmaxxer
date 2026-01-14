@@ -766,12 +766,50 @@ body{
   font-size: 12px;
 }
 
+.diagnostics-grid{
+  display:flex;
+  flex-direction:column;
+  gap: 6px;
+  margin-top: 10px;
+}
+.diagnostic-row{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap: 12px;
+  padding: 6px 0;
+  border-bottom: 1px dashed rgba(255,255,255,.08);
+  font-size: 12px;
+}
+.diagnostic-row:last-child{ border-bottom: none; }
+.diagnostic-label{ color: var(--muted); }
+.diagnostic-value{
+  color: var(--text);
+  text-align:right;
+  max-width: 60%;
+  word-break: break-word;
+}
+
 /* --- Review --- */
 .review-matrix{
   display:flex;
   flex-direction:column;
   gap: 6px;
   margin-top: 12px;
+}
+.review-issues{
+  display:flex;
+  flex-wrap:wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+.issue-chip{
+  border-radius: 999px;
+  border: 1px solid rgba(255,255,255,.12);
+  background: rgba(255,255,255,.04);
+  color: var(--text);
+  font-size: 11px;
+  padding: 6px 10px;
 }
 .matrix-row{
   display:grid;
