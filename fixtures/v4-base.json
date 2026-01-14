@@ -1,0 +1,164 @@
+{
+  "version": 4,
+  "meta": {
+    "version": 4,
+    "installId": "install-123",
+    "appVersion": "0.0.0-dev",
+    "storageMode": "idb",
+    "persistStatus": "granted",
+    "lastSnapshotTs": ""
+  },
+  "settings": {
+    "dayStart": "06:00",
+    "dayEnd": "23:59",
+    "ftnEnd": "12:00",
+    "lunchEnd": "16:00",
+    "dinnerEnd": "21:00",
+    "sunrise": "07:00",
+    "sunset": "17:00",
+    "focusMode": "nowfade",
+    "sunMode": "manual",
+    "phase": "maintenance",
+    "weekStart": 1,
+    "privacy": {
+      "appLock": false,
+      "redactHome": false,
+      "exportEncryptedByDefault": false
+    }
+  },
+  "rosters": {
+    "proteins": [
+      {
+        "id": "prot-beef",
+        "label": "Beef",
+        "aliases": ["Steak"],
+        "tags": ["protein:ruminant"],
+        "pinned": true,
+        "archived": false,
+        "tsCreated": "2026-01-05T10:00:00.000Z",
+        "tsUpdated": "2026-01-05T10:00:00.000Z"
+      },
+      {
+        "id": "prot-salmon",
+        "label": "Salmon",
+        "aliases": [],
+        "tags": ["protein:fish"],
+        "pinned": false,
+        "archived": false,
+        "tsCreated": "2026-01-05T10:05:00.000Z",
+        "tsUpdated": "2026-01-05T10:05:00.000Z"
+      }
+    ],
+    "carbs": [
+      {
+        "id": "carb-rice",
+        "label": "White rice",
+        "aliases": ["Rice"],
+        "tags": ["carb:starch"],
+        "pinned": false,
+        "archived": false,
+        "tsCreated": "2026-01-05T10:10:00.000Z",
+        "tsUpdated": "2026-01-05T10:10:00.000Z"
+      }
+    ],
+    "fats": [
+      {
+        "id": "fat-butter",
+        "label": "Butter",
+        "aliases": [],
+        "tags": ["fat:dairy"],
+        "pinned": false,
+        "archived": false,
+        "tsCreated": "2026-01-05T10:15:00.000Z",
+        "tsUpdated": "2026-01-05T10:15:00.000Z"
+      }
+    ],
+    "micros": [
+      {
+        "id": "micro-garlic",
+        "label": "Garlic",
+        "aliases": [],
+        "tags": ["micro:allium"],
+        "pinned": false,
+        "archived": false,
+        "tsCreated": "2026-01-05T10:20:00.000Z",
+        "tsUpdated": "2026-01-05T10:20:00.000Z"
+      }
+    ]
+  },
+  "logs": {
+    "2026-01-11": {
+      "segments": {
+        "ftn": {
+          "status": "logged",
+          "ftnMode": "lite",
+          "proteins": ["prot-beef"],
+          "carbs": ["carb-rice"],
+          "fats": [],
+          "micros": [],
+          "collision": "auto",
+          "highFatMeal": "auto",
+          "seedOil": "",
+          "notes": "",
+          "tsFirst": "2026-01-11T08:00:00.000Z",
+          "tsLast": "2026-01-11T08:00:00.000Z",
+          "rev": 1
+        },
+        "lunch": {
+          "status": "logged",
+          "proteins": ["prot-salmon"],
+          "carbs": ["carb-rice"],
+          "fats": ["fat-butter"],
+          "micros": ["micro-garlic"],
+          "collision": "auto",
+          "highFatMeal": "no",
+          "seedOil": "yes",
+          "notes": "",
+          "tsFirst": "2026-01-11T13:10:00.000Z",
+          "tsLast": "2026-01-11T13:10:00.000Z",
+          "rev": 1
+        },
+        "dinner": {
+          "status": "logged",
+          "proteins": ["prot-beef"],
+          "carbs": [],
+          "fats": ["fat-butter"],
+          "micros": [],
+          "collision": "auto",
+          "highFatMeal": "yes",
+          "seedOil": "",
+          "notes": "",
+          "tsFirst": "2026-01-11T19:30:00.000Z",
+          "tsLast": "2026-01-11T19:30:00.000Z",
+          "rev": 1
+        },
+        "late": {
+          "status": "unlogged",
+          "proteins": [],
+          "carbs": [],
+          "fats": [],
+          "micros": [],
+          "collision": "auto",
+          "highFatMeal": "auto",
+          "seedOil": "",
+          "notes": "",
+          "tsFirst": "",
+          "tsLast": "",
+          "rev": 0
+        }
+      },
+      "movedBeforeLunch": true,
+      "trained": true,
+      "highFatDay": false,
+      "energy": "4",
+      "mood": "3",
+      "cravings": "2",
+      "notes": "",
+      "tsCreated": "2026-01-11T06:00:00.000Z",
+      "tsLast": "2026-01-11T19:30:00.000Z",
+      "rev": 2
+    }
+  },
+  "exportedAt": "2026-01-11T20:00:00.000Z",
+  "appVersion": "0.0.0-dev"
+}

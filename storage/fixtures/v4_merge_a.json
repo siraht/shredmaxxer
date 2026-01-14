@@ -1,0 +1,75 @@
+{
+  "version": 4,
+  "meta": {
+    "version": 4,
+    "installId": "merge-a",
+    "appVersion": "0.0.0-dev",
+    "storageMode": "idb",
+    "persistStatus": "unknown"
+  },
+  "settings": {
+    "dayStart": "06:00",
+    "dayEnd": "23:59",
+    "ftnEnd": "12:00",
+    "lunchEnd": "16:00",
+    "dinnerEnd": "21:00",
+    "sunrise": "07:00",
+    "sunset": "17:00",
+    "weekStart": 0,
+    "focusMode": "nowfade",
+    "sunMode": "manual",
+    "phase": "",
+    "privacy": {
+      "appLock": false,
+      "redactHome": false,
+      "exportEncryptedByDefault": false
+    }
+  },
+  "rosters": {
+    "proteins": [
+      {
+        "id": "p1",
+        "label": "Beef",
+        "aliases": [],
+        "tags": [],
+        "pinned": false,
+        "archived": false,
+        "tsCreated": "2026-01-11T00:00:00.000Z",
+        "tsUpdated": "2026-01-11T00:00:00.000Z"
+      }
+    ],
+    "carbs": [],
+    "fats": [],
+    "micros": []
+  },
+  "logs": {
+    "2026-01-11": {
+      "segments": {
+        "lunch": {
+          "status": "logged",
+          "proteins": ["p1"],
+          "carbs": [],
+          "fats": [],
+          "micros": [],
+          "collision": "auto",
+          "highFatMeal": "auto",
+          "seedOil": "",
+          "notes": "A",
+          "tsFirst": "2026-01-11T10:00:00.000Z",
+          "tsLast": "2026-01-11T10:00:00.000Z",
+          "rev": 1
+        }
+      },
+      "movedBeforeLunch": false,
+      "trained": false,
+      "highFatDay": false,
+      "energy": "",
+      "mood": "",
+      "cravings": "",
+      "notes": "",
+      "tsCreated": "2026-01-11T10:00:00.000Z",
+      "tsLast": "2026-01-11T10:00:00.000Z",
+      "rev": 1
+    }
+  }
+}

@@ -1,0 +1,60 @@
+{
+  "version": 3,
+  "settings": {
+    "dayStart": "06:00",
+    "dayEnd": "23:59",
+    "ftnEnd": "12:00",
+    "lunchEnd": "16:00",
+    "dinnerEnd": "21:00",
+    "sunrise": "07:00",
+    "sunset": "17:00",
+    "weekStart": 0
+  },
+  "rosters": {
+    "proteins": ["Beef", "Eggs"],
+    "carbs": ["Rice"],
+    "fats": ["Tallow"],
+    "micros": ["Garlic"]
+  },
+  "logs": {
+    "2026-01-10": {
+      "segments": {
+        "ftn": {
+          "ftnMode": "ftn",
+          "proteins": [],
+          "carbs": ["Rice"],
+          "fats": [],
+          "micros": [],
+          "collision": "auto",
+          "highFatMeal": "auto",
+          "seedOil": "",
+          "notes": "",
+          "rev": 1,
+          "tsLast": "2026-01-10T08:00:00Z"
+        },
+        "lunch": {
+          "proteins": ["Beef"],
+          "carbs": [],
+          "fats": ["Tallow"],
+          "micros": ["Garlic"],
+          "collision": true,
+          "highFatMeal": false,
+          "seedOil": "none",
+          "notes": "",
+          "rev": 2,
+          "tsLast": "2026-01-10T12:30:00Z"
+        }
+      },
+      "movedBeforeLunch": true,
+      "trained": false,
+      "highFatDay": false,
+      "energy": "3",
+      "mood": "4",
+      "cravings": "2",
+      "notes": "",
+      "tsCreated": "2026-01-10T08:00:00Z",
+      "tsLast": "2026-01-10T12:30:00Z",
+      "rev": 2
+    }
+  }
+}

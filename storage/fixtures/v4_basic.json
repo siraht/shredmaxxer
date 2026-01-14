@@ -1,0 +1,140 @@
+{
+  "version": 4,
+  "meta": {
+    "version": 4,
+    "installId": "install-1",
+    "appVersion": "0.0.0-dev",
+    "storageMode": "idb",
+    "persistStatus": "unknown"
+  },
+  "settings": {
+    "dayStart": "06:00",
+    "dayEnd": "23:59",
+    "ftnEnd": "12:00",
+    "lunchEnd": "16:00",
+    "dinnerEnd": "21:00",
+    "sunrise": "07:00",
+    "sunset": "17:00",
+    "weekStart": 0,
+    "focusMode": "nowfade",
+    "sunMode": "manual",
+    "phase": "",
+    "privacy": {
+      "appLock": false,
+      "redactHome": false,
+      "exportEncryptedByDefault": false
+    }
+  },
+  "rosters": {
+    "proteins": [
+      {
+        "id": "p1",
+        "label": "Beef",
+        "aliases": [],
+        "tags": ["protein:animal"],
+        "pinned": true,
+        "archived": false,
+        "tsCreated": "2026-01-10T00:00:00.000Z",
+        "tsUpdated": "2026-01-10T00:00:00.000Z"
+      }
+    ],
+    "carbs": [
+      {
+        "id": "c1",
+        "label": "Rice",
+        "aliases": [],
+        "tags": ["carb:starch"],
+        "pinned": false,
+        "archived": false,
+        "tsCreated": "2026-01-10T00:00:00.000Z",
+        "tsUpdated": "2026-01-10T00:00:00.000Z"
+      }
+    ],
+    "fats": [
+      {
+        "id": "f1",
+        "label": "Tallow",
+        "aliases": [],
+        "tags": ["fat:dense"],
+        "pinned": false,
+        "archived": false,
+        "tsCreated": "2026-01-10T00:00:00.000Z",
+        "tsUpdated": "2026-01-10T00:00:00.000Z"
+      }
+    ],
+    "micros": []
+  },
+  "logs": {
+    "2026-01-10": {
+      "segments": {
+        "ftn": {
+          "status": "logged",
+          "ftnMode": "ftn",
+          "proteins": ["p1"],
+          "carbs": ["c1"],
+          "fats": [],
+          "micros": [],
+          "collision": "auto",
+          "highFatMeal": "auto",
+          "seedOil": "",
+          "notes": "",
+          "tsFirst": "2026-01-10T08:00:00.000Z",
+          "tsLast": "2026-01-10T08:00:00.000Z",
+          "rev": 1
+        },
+        "lunch": {
+          "status": "logged",
+          "proteins": ["p1"],
+          "carbs": [],
+          "fats": ["f1"],
+          "micros": [],
+          "collision": "auto",
+          "highFatMeal": "auto",
+          "seedOil": "none",
+          "notes": "",
+          "tsFirst": "2026-01-10T12:00:00.000Z",
+          "tsLast": "2026-01-10T12:00:00.000Z",
+          "rev": 1
+        },
+        "dinner": {
+          "status": "unlogged",
+          "proteins": [],
+          "carbs": [],
+          "fats": [],
+          "micros": [],
+          "collision": "auto",
+          "highFatMeal": "auto",
+          "seedOil": "",
+          "notes": "",
+          "tsFirst": "",
+          "tsLast": "",
+          "rev": 0
+        },
+        "late": {
+          "status": "unlogged",
+          "proteins": [],
+          "carbs": [],
+          "fats": [],
+          "micros": [],
+          "collision": "auto",
+          "highFatMeal": "auto",
+          "seedOil": "",
+          "notes": "",
+          "tsFirst": "",
+          "tsLast": "",
+          "rev": 0
+        }
+      },
+      "movedBeforeLunch": false,
+      "trained": true,
+      "highFatDay": false,
+      "energy": "3",
+      "mood": "4",
+      "cravings": "2",
+      "notes": "",
+      "tsCreated": "2026-01-10T08:00:00.000Z",
+      "tsLast": "2026-01-10T12:00:00.000Z",
+      "rev": 1
+    }
+  }
+}

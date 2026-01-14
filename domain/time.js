@@ -165,6 +165,80 @@ export function addDaysLocal(date, deltaDays){
   );
 }
 
+function toRadians(deg){
+  return deg * (Math.PI / 180);
+}
+
+function toDegrees(rad){
+  return rad * (180 / Math.PI);
+}
+
+function normalizeDegrees(deg){
+  let out = deg % 360;
+  if(out < 0) out += 360;
+  return out;
+}
+
+function dayOfYear(date){
+  const start = new Date(date.getFullYear(), 0, 0);
+  const diff = date - start;
+  return Math.floor(diff / 86400000);
+}
+
+/**
+ * Compute sunrise/sunset for a date and location (local minutes).
+ * Returns nulls for polar day/night.
+ * @param {Date} date
+ * @param {number} lat
+ * @param {number} lon
+ * @returns {{sunrise:number|null, sunset:number|null, status:"ok"|"polarDay"|"polarNight"}}
+ */
+export function computeSunTimes(date, lat, lon){
+  const d = date instanceof Date ? date : new Date();
+  const zenith = 90.833; // official
+  const N = dayOfYear(d);
+  const lngHour = lon / 15;
+
+  const calcTime = (isSunrise) => {
+    const t = N + ((isSunrise ? 6 : 18) - lngHour) / 24;
+    const M = (0.9856 * t) - 3.289;
+    let L = M + (1.916 * Math.sin(toRadians(M))) + (0.020 * Math.sin(toRadians(2 * M))) + 282.634;
+    L = normalizeDegrees(L);
+
+    let RA = toDegrees(Math.atan(0.91764 * Math.tan(toRadians(L))));
+    RA = normalizeDegrees(RA);
+    const Lquadrant = Math.floor(L / 90) * 90;
+    const RAquadrant = Math.floor(RA / 90) * 90;
+    RA = RA + (Lquadrant - RAquadrant);
+    RA = RA / 15;
+
+    const sinDec = 0.39782 * Math.sin(toRadians(L));
+    const cosDec = Math.cos(Math.asin(sinDec));
+    const cosH = (Math.cos(toRadians(zenith)) - (sinDec * Math.sin(toRadians(lat))))
+      / (cosDec * Math.cos(toRadians(lat)));
+
+    if(cosH > 1) return { status: "polarNight", minutes: null };
+    if(cosH < -1) return { status: "polarDay", minutes: null };
+
+    let H = isSunrise ? (360 - toDegrees(Math.acos(cosH))) : toDegrees(Math.acos(cosH));
+    H = H / 15;
+    const T = H + RA - (0.06571 * t) - 6.622;
+    let UT = T - lngHour;
+    UT = ((UT % 24) + 24) % 24;
+
+    const utcMidnight = Date.UTC(d.getFullYear(), d.getMonth(), d.getDate(), 0, 0, 0);
+    const local = new Date(utcMidnight + (UT * 3600000));
+    const minutes = (local.getHours() * 60 + local.getMinutes()) % 1440;
+    return { status: "ok", minutes };
+  };
+
+  const rise = calcTime(true);
+  const set = calcTime(false);
+  if(rise.status !== "ok") return { sunrise: null, sunset: null, status: rise.status };
+  if(set.status !== "ok") return { sunrise: null, sunset: null, status: set.status };
+  return { sunrise: rise.minutes, sunset: set.minutes, status: "ok" };
+}
+
 /**
  * Resolve the active protocol day DateKey for the given time.
  * For wrap-around days, times after midnight but before dayEnd map to yesterday.

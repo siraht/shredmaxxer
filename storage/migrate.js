@@ -17,12 +17,16 @@ export const DEFAULT_SETTINGS = {
   sunset: "17:00",
   phase: "",
   weekStart: 0,
+  nudgesEnabled: false,
+  supplementsMode: "none",
   lastKnownLat: undefined,
   lastKnownLon: undefined,
   privacy: {
     appLock: false,
+    appLockHash: "",
     redactHome: false,
-    exportEncryptedByDefault: false
+    exportEncryptedByDefault: false,
+    blurOnBackground: false
   }
 };
 
@@ -113,14 +117,16 @@ export function migrateV3ToV4(v3State, options = {}){
     proteins: [],
     carbs: [],
     fats: [],
-    micros: []
+    micros: [],
+    supplements: []
   };
 
   const labelMaps = {
     proteins: new Map(),
     carbs: new Map(),
     fats: new Map(),
-    micros: new Map()
+    micros: new Map(),
+    supplements: new Map()
   };
 
   const addLabel = (category, label) => {
@@ -187,6 +193,7 @@ export function migrateV3ToV4(v3State, options = {}){
 
     logs[dateKey] = {
       segments,
+      supplements: { mode: "none", items: [], notes: "", tsLast: "" },
       movedBeforeLunch: !!day?.movedBeforeLunch,
       trained: !!day?.trained,
       highFatDay: !!day?.highFatDay,

@@ -1,4 +1,33 @@
 
+@font-face{
+  font-family: "Space Grotesk";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("assets/fonts/SpaceGrotesk.woff2") format("woff2");
+}
+@font-face{
+  font-family: "Space Grotesk";
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url("assets/fonts/SpaceGrotesk.woff2") format("woff2");
+}
+@font-face{
+  font-family: "Fraunces";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("assets/fonts/Fraunces.woff2") format("woff2");
+}
+@font-face{
+  font-family: "Fraunces";
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url("assets/fonts/Fraunces.woff2") format("woff2");
+}
+
 :root{
   /* --- Color system: Solar Dial --- */
   --ink: #050714;
@@ -37,7 +66,7 @@ html,body{ height:100%; }
 
 body{
   margin:0;
-  font-family: ui-rounded, "SF Pro Rounded", "Segoe UI Variable", "Segoe UI", system-ui, sans-serif;
+  font-family: "Space Grotesk", ui-rounded, "SF Pro Rounded", "Segoe UI Variable", "Segoe UI", system-ui, sans-serif;
   color: var(--text);
 
   /* time-reactive sky (variables updated by JS) */
@@ -47,6 +76,45 @@ body{
     radial-gradient(880px 560px at 50% 120%, rgba(255,92,122,.10), transparent 55%),
     linear-gradient(180deg, var(--skyA), var(--skyB) 55%, var(--skyC));
   overflow-x:hidden;
+}
+
+.privacy-blur{
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+  background: rgba(5,7,20,.65);
+  backdrop-filter: blur(14px) saturate(.7);
+}
+.app-lock{
+  position: fixed;
+  inset: 0;
+  z-index: 2100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(5,7,20,.82);
+  padding: 20px;
+}
+.app-lock.hidden{ display: none; }
+.app-lock-card{
+  width: min(340px, 92vw);
+  padding: 18px 18px 16px;
+  border-radius: var(--radius2);
+  border: 1px solid rgba(255,255,255,.16);
+  background: rgba(8,10,20,.92);
+  box-shadow: 0 20px 40px rgba(0,0,0,.45);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.app-lock-title{
+  font-family: "Fraunces", ui-serif, "Iowan Old Style", "Palatino Linotype", Palatino, serif;
+  font-size: 18px;
+  color: var(--text);
+}
+.app-lock-sub{
+  font-size: 12px;
+  color: var(--muted);
 }
 
 .sky-noise{
@@ -125,7 +193,7 @@ body{
 }
 
 .brand-title{
-  font-family: ui-serif, "Iowan Old Style", "Palatino Linotype", Palatino, serif;
+  font-family: "Fraunces", ui-serif, "Iowan Old Style", "Palatino Linotype", Palatino, serif;
   letter-spacing: .06em;
   text-transform: uppercase;
   font-size: 14px;
@@ -175,6 +243,7 @@ body{
 }
 
 .view.hidden{ display:none; }
+.privacy-blur.hidden{ display:none; }
 
 .panel{
   border-radius: var(--radius);
@@ -221,7 +290,7 @@ body{
 .status-error{ color: var(--bad); }
 
 .section-title{
-  font-family: ui-serif, "Iowan Old Style", "Palatino Linotype", Palatino, serif;
+  font-family: "Fraunces", ui-serif, "Iowan Old Style", "Palatino Linotype", Palatino, serif;
   font-size: 14px;
   letter-spacing: .08em;
   text-transform: uppercase;
@@ -285,7 +354,7 @@ body{
   text-align:right;
 }
 .phase-label{
-  font-family: ui-serif, "Iowan Old Style", "Palatino Linotype", Palatino, serif;
+  font-family: "Fraunces", ui-serif, "Iowan Old Style", "Palatino Linotype", Palatino, serif;
   font-size: 14px;
   letter-spacing: .05em;
 }
@@ -415,7 +484,7 @@ body{
 }
 
 .segment-title{
-  font-family: ui-serif, "Iowan Old Style", "Palatino Linotype", Palatino, serif;
+  font-family: "Fraunces", ui-serif, "Iowan Old Style", "Palatino Linotype", Palatino, serif;
   font-size: 12px;
   letter-spacing: .08em;
   text-transform: uppercase;
@@ -588,7 +657,7 @@ body{
 }
 .ritual-title{
   margin-top: 4px;
-  font-family: ui-serif, "Iowan Old Style", "Palatino Linotype", Palatino, serif;
+  font-family: "Fraunces", ui-serif, "Iowan Old Style", "Palatino Linotype", Palatino, serif;
   letter-spacing: .06em;
   text-transform: uppercase;
   font-size: 12px;
@@ -601,6 +670,43 @@ body{
 
 @media (max-width: 520px){
   .rituals{ grid-template-columns: 1fr; }
+}
+
+/* --- Today nudge --- */
+.nudge-card{
+  margin-top: 12px;
+  padding: 12px;
+  border-radius: var(--radius2);
+  border: 1px solid rgba(255,255,255,.12);
+  background: rgba(255,255,255,.03);
+  display:flex;
+  flex-direction:column;
+  gap: 6px;
+}
+.nudge-head{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap: 10px;
+}
+.nudge-kicker{
+  font-size: 10px;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.nudge-title{
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text);
+}
+.nudge-message{
+  font-size: 12px;
+  color: var(--text);
+}
+.nudge-reason{
+  font-size: 11px;
+  color: var(--muted);
 }
 
 /* --- Signals --- */
@@ -628,6 +734,27 @@ body{
   display:flex;
   gap: 8px;
 }
+.redaction-banner{
+  margin-top: 12px;
+  padding: 10px 12px;
+  border-radius: var(--radius2);
+  border: 1px dashed rgba(255,255,255,.18);
+  color: var(--muted);
+  font-size: 12px;
+  text-align: center;
+}
+.redact-home #viewToday .segment-title,
+.redact-home #viewToday .segment-time,
+.redact-home #viewToday .phase-label,
+.redact-home #viewToday .phase-sub,
+.redact-home #viewToday .ritual-title,
+.redact-home #viewToday .ritual-sub,
+.redact-home #viewToday .signal-label{
+  visibility: hidden;
+}
+.redact-home #viewToday .nudge-card{
+  display: none;
+}
 .dot{
   width: 18px;
   height: 18px;
@@ -642,6 +769,27 @@ body{
   background: rgba(183,255,74,.18);
   border-color: rgba(183,255,74,.28);
   box-shadow: 0 0 18px rgba(183,255,74,.18);
+}
+
+/* --- Supplements --- */
+.supplements{
+  margin-top: 12px;
+  padding: 12px;
+  border-radius: var(--radius2);
+  border: 1px solid rgba(255,255,255,.10);
+  background: rgba(255,255,255,.03);
+  display:flex;
+  flex-direction:column;
+  gap: 10px;
+}
+.supplements-head{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap: 8px;
+}
+.supplements-notes .notes-box{
+  min-height: 64px;
 }
 
 /* --- Notes --- */
@@ -749,7 +897,7 @@ body{
   gap: 4px;
 }
 .day-item .d{
-  font-family: ui-serif, "Iowan Old Style", "Palatino Linotype", Palatino, serif;
+  font-family: "Fraunces", ui-serif, "Iowan Old Style", "Palatino Linotype", Palatino, serif;
   letter-spacing: .06em;
   text-transform: uppercase;
   font-size: 12px;
@@ -858,6 +1006,60 @@ body{
   gap: 8px;
   margin-top: 10px;
 }
+.review-insights{
+  display:flex;
+  flex-direction:column;
+  gap: 12px;
+  margin-top: 8px;
+}
+.insight-group{
+  display:flex;
+  flex-direction:column;
+  gap: 8px;
+}
+.insight-group-title{
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  color: var(--muted);
+}
+.insight-card{
+  display:flex;
+  flex-direction:column;
+  gap: 6px;
+  padding: 10px 12px;
+  border-radius: var(--radius2);
+  border: 1px solid rgba(255,255,255,.10);
+  background: rgba(255,255,255,.03);
+}
+.insight-card.tone-info{ border-color: rgba(99,215,255,.22); }
+.insight-card.tone-nudge{ border-color: rgba(183,255,74,.25); }
+.insight-card.tone-warn{ border-color: rgba(255,120,120,.28); }
+.insight-header{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap: 10px;
+}
+.insight-meta{
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  color: var(--muted);
+}
+.insight-title{
+  font-size: 12px;
+  color: var(--text);
+  letter-spacing: .02em;
+}
+.insight-message{
+  font-size: 12px;
+  color: var(--text);
+}
+.insight-reason{
+  font-size: 11px;
+  color: var(--muted);
+}
 .corr-row{
   padding: 8px 10px;
   border-radius: var(--radius2);
@@ -894,7 +1096,7 @@ body{
 .matrix-row[data-date]{ cursor:pointer; }
 .matrix-row[data-date]:hover{ border-color: rgba(99,215,255,.22); }
 .matrix-date{
-  font-family: ui-serif, "Iowan Old Style", "Palatino Linotype", Palatino, serif;
+  font-family: "Fraunces", ui-serif, "Iowan Old Style", "Palatino Linotype", Palatino, serif;
   font-size: 12px;
   letter-spacing: .04em;
   text-transform: uppercase;
@@ -986,7 +1188,7 @@ body{
   gap: 10px;
 }
 .roster-title{
-  font-family: ui-serif, "Iowan Old Style", "Palatino Linotype", Palatino, serif;
+  font-family: "Fraunces", ui-serif, "Iowan Old Style", "Palatino Linotype", Palatino, serif;
   letter-spacing: .06em;
   text-transform: uppercase;
   font-size: 12px;
@@ -1123,7 +1325,7 @@ body{
 }
 
 .sheet-title{
-  font-family: ui-serif, "Iowan Old Style", "Palatino Linotype", Palatino, serif;
+  font-family: "Fraunces", ui-serif, "Iowan Old Style", "Palatino Linotype", Palatino, serif;
   letter-spacing: .08em;
   text-transform: uppercase;
   font-size: 13px;
@@ -1193,7 +1395,7 @@ body{
   margin-bottom: 10px;
 }
 .block-title{
-  font-family: ui-serif, "Iowan Old Style", "Palatino Linotype", Palatino, serif;
+  font-family: "Fraunces", ui-serif, "Iowan Old Style", "Palatino Linotype", Palatino, serif;
   letter-spacing: .06em;
   text-transform: uppercase;
   font-size: 12px;

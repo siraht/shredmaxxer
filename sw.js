@@ -1,7 +1,8 @@
 /* App-shell cache with explicit versioning */
 const CACHE_PREFIX = "shredmaxx-app-shell";
-const CACHE_VERSION = "v4-0.3";
+const CACHE_VERSION = "v4-0.5";
 const CACHE_NAME = `${CACHE_PREFIX}-${CACHE_VERSION}`;
+const RUNTIME_CACHE = "shredmaxx-runtime-v1";
 
 const ASSETS = [
   "./",
@@ -22,6 +23,7 @@ const ASSETS = [
   "./domain/revisions.js",
   "./domain/flags.js",
   "./domain/heuristics.js",
+  "./domain/insights.js",
   "./domain/search.js",
   "./domain/rotation.js",
   "./domain/coverage.js",
@@ -40,6 +42,8 @@ const ASSETS = [
   "./storage/validate.js",
   "./storage/snapshots.js",
   "./storage/migrate.js",
+  "./assets/fonts/SpaceGrotesk.woff2",
+  "./assets/fonts/Fraunces.woff2",
   "./manifest.webmanifest",
   "./icons/icon-192.png",
   "./icons/icon-512.png"
@@ -82,6 +86,19 @@ self.addEventListener("fetch", (event) => {
   if(ASSET_SET.has(url)){
     event.respondWith(
       caches.match(event.request).then((cached) => cached || fetch(event.request))
+    );
+    return;
+  }
+
+  if(event.request.destination === "image"){
+    event.respondWith(
+      caches.open(RUNTIME_CACHE).then(async (cache) => {
+        const cached = await cache.match(event.request);
+        if(cached) return cached;
+        const fresh = await fetch(event.request);
+        if(fresh && fresh.ok) cache.put(event.request, fresh.clone());
+        return fresh;
+      })
     );
   }
 });

@@ -50,13 +50,14 @@ const BASE_ROSTERS = {
     { label: "Cilantro" },
     { label: "Arugula (bitter greens)" },
     { label: "Seaweed" }
-  ]
+  ],
+  supplements: []
 };
 
 /**
  * Create the default v4 rosters with conservative tags.
  * @param {Date} [now]
- * @returns {{proteins:any[], carbs:any[], fats:any[], micros:any[]}}
+ * @returns {{proteins:any[], carbs:any[], fats:any[], micros:any[], supplements:any[]}}
  */
 export function createDefaultRosters(now){
   const at = now instanceof Date ? now : new Date();
@@ -64,13 +65,14 @@ export function createDefaultRosters(now){
     proteins: BASE_ROSTERS.proteins.map((item) => createRosterItem(item.label, { tags: item.tags || [], now: at })),
     carbs: BASE_ROSTERS.carbs.map((item) => createRosterItem(item.label, { tags: item.tags || [], now: at })),
     fats: BASE_ROSTERS.fats.map((item) => createRosterItem(item.label, { tags: item.tags || [], now: at })),
-    micros: BASE_ROSTERS.micros.map((item) => createRosterItem(item.label, { tags: item.tags || [], now: at }))
+    micros: BASE_ROSTERS.micros.map((item) => createRosterItem(item.label, { tags: item.tags || [], now: at })),
+    supplements: BASE_ROSTERS.supplements.map((item) => createRosterItem(item.label, { tags: item.tags || [], now: at }))
   };
 }
 
 /**
  * Find a default roster item template by label.
- * @param {"proteins"|"carbs"|"fats"|"micros"} category
+ * @param {"proteins"|"carbs"|"fats"|"micros"|"supplements"} category
  * @param {string} label
  * @returns {{label:string, tags?:string[]} | null}
  */

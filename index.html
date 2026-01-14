@@ -7,9 +7,21 @@
   <title>Shredmaxx — Solar Log</title>
   <link rel="manifest" href="manifest.webmanifest" />
   <link rel="stylesheet" href="style.css" />
+  <link rel="preload" href="assets/fonts/SpaceGrotesk.woff2" as="font" type="font/woff2" crossorigin />
+  <link rel="preload" href="assets/fonts/Fraunces.woff2" as="font" type="font/woff2" crossorigin />
 </head>
 <body>
   <div class="sky-noise" aria-hidden="true"></div>
+  <div class="privacy-blur hidden" id="privacyBlurOverlay" aria-hidden="true"></div>
+  <div class="app-lock hidden" id="appLockOverlay" role="dialog" aria-modal="true" aria-hidden="true">
+    <div class="app-lock-card">
+      <div class="app-lock-title">App locked</div>
+      <div class="app-lock-sub">Enter your passcode to continue.</div>
+      <input class="field-input" id="appLockInput" type="password" inputmode="numeric" autocomplete="current-password" placeholder="Passcode" />
+      <button class="btn" id="appLockSubmit" type="button">Unlock</button>
+      <div class="tiny muted" id="appLockMessage"></div>
+    </div>
+  </div>
   <header class="topbar">
     <div class="brand">
       <div class="brand-mark" aria-hidden="true">
@@ -127,9 +139,34 @@
           </div>
         </div>
 
-        <div class="notes">
+        <div class="nudge-card" id="todayNudge" hidden>
+          <div class="nudge-head">
+            <div class="nudge-kicker">Nudge</div>
+            <button class="btn ghost tinybtn" id="todayNudgeDismiss" type="button">Dismiss</button>
+          </div>
+          <div class="nudge-title" id="todayNudgeTitle"></div>
+          <div class="nudge-message" id="todayNudgeMessage"></div>
+          <div class="nudge-reason" id="todayNudgeReason"></div>
+        </div>
+
+        <div class="supplements" id="supplementsPanel" hidden>
+          <div class="supplements-head">
+            <div class="section-title">Supplements</div>
+            <div class="tiny muted" id="supplementsModeLabel">Off</div>
+          </div>
+          <div class="chips" id="supplementsChips"></div>
+          <div class="notes supplements-notes">
+            <label class="notes-label" for="supplementsNotes">Notes</label>
+            <textarea id="supplementsNotes" class="notes-box" placeholder="Optional notes"></textarea>
+          </div>
+        </div>
+
+        <div class="notes" id="notesBlock">
           <label class="notes-label" for="notes">Notes</label>
           <textarea id="notes" class="notes-box" placeholder="Short signal. No essays."></textarea>
+        </div>
+        <div class="redaction-banner" id="redactionBanner" hidden>
+          Notes hidden (redaction on)
         </div>
       </div>
 
@@ -151,6 +188,7 @@
         <div class="section-title">Backup</div>
         <div class="row gap">
           <button class="btn" id="exportBtn" type="button">Export JSON</button>
+          <button class="btn ghost" id="exportAltBtn" type="button">Export encrypted</button>
           <label class="btn ghost" for="importFile">Import</label>
           <input id="importFile" type="file" accept="application/json" hidden />
         </div>
@@ -215,6 +253,11 @@
         <div class="section-title">Rotation picks</div>
         <div class="review-picks" id="rotationPicks"></div>
       </div>
+
+      <div class="panel">
+        <div class="section-title">Insights</div>
+        <div class="review-insights" id="reviewInsights"></div>
+      </div>
     </section>
 
     <!-- SETTINGS -->
@@ -275,6 +318,12 @@
           </div>
 
           <div class="field">
+            <label class="field-label" for="sunAutoBtn">Auto sunrise/sunset</label>
+            <button class="btn ghost small" id="sunAutoBtn" type="button">Update from location</button>
+            <div class="field-help" id="sunAutoStatus">Requires explicit permission; no network calls.</div>
+          </div>
+
+          <div class="field">
             <label class="field-label" for="setPhase">Phase</label>
             <select class="field-input" id="setPhase">
               <option value="">—</option>
@@ -301,6 +350,16 @@
               <option value="1">Monday</option>
             </select>
             <div class="field-help">Used for Weekly Review ranges.</div>
+          </div>
+
+          <div class="field">
+            <label class="field-label" for="setSupplementsMode">Supplements mode</label>
+            <select class="field-input" id="setSupplementsMode">
+              <option value="none">Off</option>
+              <option value="essential">Essential</option>
+              <option value="advanced">Advanced</option>
+            </select>
+            <div class="field-help">Optional module; off by default.</div>
           </div>
         </div>
 
@@ -345,6 +404,45 @@
           </div>
           <div class="roster-list" id="roster-micros"></div>
         </div>
+
+        <div class="roster-block" id="roster-supplements-block" hidden>
+          <div class="roster-head">
+            <div class="roster-title">Supplements</div>
+            <button class="btn tinybtn" data-roster="supplements" type="button">+ Add</button>
+          </div>
+          <div class="roster-list" id="roster-supplements"></div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="section-title">Insights</div>
+        <label class="check">
+          <input type="checkbox" id="todayNudgeToggle" />
+          Show a Today nudge card
+        </label>
+        <div class="tiny muted">At most one insight, off by default.</div>
+      </div>
+
+      <div class="panel">
+        <div class="section-title">Privacy</div>
+        <label class="check">
+          <input type="checkbox" id="privacyAppLockToggle" />
+          App lock (passcode)
+        </label>
+        <button class="btn ghost small" id="appLockSetBtn" type="button">Set passcode</button>
+        <label class="check">
+          <input type="checkbox" id="privacyBlurToggle" />
+          Blur the app when backgrounded
+        </label>
+        <label class="check">
+          <input type="checkbox" id="privacyRedactToggle" />
+          Redact Today view notes and labels
+        </label>
+        <label class="check">
+          <input type="checkbox" id="privacyEncryptedToggle" />
+          Default to encrypted export
+        </label>
+        <div class="tiny muted">App lock gates access on launch; blur affects app switcher snapshots; redaction hides Today labels/notes; encrypted export asks for a passphrase.</div>
       </div>
     </section>
   </main>
@@ -469,11 +567,6 @@
   <div class="update-toast" id="undoToast" hidden role="status" aria-live="polite">
     <span id="undoLabel">Change saved</span>
     <button class="btn small" id="undoAction" type="button">Undo</button>
-  </div>
-
-  <div class="update-toast" id="undoToast" hidden role="status" style="bottom: 70px;">
-    <span id="undoMsg">Saved</span>
-    <button class="btn small" id="undoBtn" type="button">Undo</button>
   </div>
 
   <script type="module" src="app/boot.js"></script>

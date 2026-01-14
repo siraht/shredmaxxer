@@ -90,10 +90,14 @@
  * @property {number} [lastKnownLon]
  * @property {""|"strict"|"maintenance"|"advanced"} phase
  * @property {number} weekStart 0=Sunday, 1=Monday, ...
+ * @property {boolean} nudgesEnabled
+ * @property {""|"none"|"essential"|"advanced"} supplementsMode
  * @property {{
  *   appLock: boolean,
+ *   appLockHash: string,
  *   redactHome: boolean,
- *   exportEncryptedByDefault: boolean
+ *   exportEncryptedByDefault: boolean,
+ *   blurOnBackground: boolean
  * }} privacy
  */
 

@@ -4,7 +4,7 @@ Local-first tracker for the Shredmaxxing protocol with a segmented day model (FT
 
 ## Status
 - **Spec**: `Solar Log v4 Implementation.md` (source of truth for v4).
-- **Prototype**: the current PWA (`index.html`, `app.js`, `style.css`) is a **v3 baseline** implementation and still uses **localStorage**. v4 work is staged via the directory scaffolding below.
+- **Prototype**: the current PWA (`index.html`, `app.js`, `style.css`) is a **v3 UI baseline** with **v4 storage + roster migration** wired in. Persistence is **IndexedDB-first** with localStorage fallback.
 
 ## What v4 tracks (fast)
 - **FTN mode**: strict / lite / off (FTN segment only)
@@ -16,6 +16,7 @@ Local-first tracker for the Shredmaxxing protocol with a segmented day model (FT
 - **High‑fat meal** and **High‑fat day** (computed + override)
 - **Signals**: Energy / Mood / Cravings (1–5)
 - Notes (daily + per segment)
+- Speed helpers: pinned + recents, undo toast, repeat last segment, copy yesterday (segment/all)
 
 ## Time model (v4)
 - Formal **protocol day** anchored to `dayStart` with wrap‑around support (`dayEnd <= dayStart`).
@@ -24,6 +25,7 @@ Local-first tracker for the Shredmaxxing protocol with a segmented day model (FT
 
 ## Data, privacy, and portability (v4)
 - **IndexedDB‑first** persistence with **localStorage** fallback.
+- Attempts **persistent storage** when supported (see Diagnostics).
 - **Snapshots** before import/migration; restore from Diagnostics.
 - **Merge‑safe import** and non‑destructive default behavior.
 - Optional hardening: **app lock**, **privacy blur**, **encrypted export** (AES‑GCM via WebCrypto).
@@ -58,9 +60,19 @@ python3 -m http.server 5173
 ```
 Then open `http://localhost:5173/` and install as a PWA if your browser supports it.
 
+## Manual QA checklist (v4)
+- Storage: add a segment, reload, confirm data persists; verify Diagnostics shows storage mode + persist status.
+- Snapshots: create a snapshot, restore it, then delete it; confirm Diagnostics updates snapshot count.
+- Import/export: export JSON, import as merge, then import as replace; verify logs/rosters expected.
+- Copy yesterday: use “Copy yesterday” with a segment list and with “all”; verify overwrite confirm and undo.
+- Review: ensure weekly summary, issue chips, correlations, matrix, and rotation picks render.
+- Update flow: with service worker enabled, confirm update toast appears on new SW version.
+
 ## Files (current prototype)
 - `index.html` UI shell
 - `style.css` visual system
-- `app.js` logic + storage (v3 baseline)
+- `app.js` logic + storage (v4 adapter + v3 UI glue)
+- `domain/` time model, heuristics, weekly review, roster logic
+- `storage/` IndexedDB adapter, migration, import/export, snapshots
 - `sw.js` offline cache
 - `manifest.webmanifest` PWA manifest

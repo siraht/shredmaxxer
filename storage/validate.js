@@ -108,17 +108,34 @@ function validateSettings(settings, errors, path){
     if(!isBoolean(settings.privacy.appLock)){
       pushError(errors, `${path}.privacy.appLock must be a boolean.`);
     }
+    if(settings.privacy.appLockHash !== undefined && !isString(settings.privacy.appLockHash)){
+      pushError(errors, `${path}.privacy.appLockHash must be a string if present.`);
+    }
     if(!isBoolean(settings.privacy.redactHome)){
       pushError(errors, `${path}.privacy.redactHome must be a boolean.`);
     }
     if(!isBoolean(settings.privacy.exportEncryptedByDefault)){
       pushError(errors, `${path}.privacy.exportEncryptedByDefault must be a boolean.`);
     }
+    if(settings.privacy.blurOnBackground !== undefined && !isBoolean(settings.privacy.blurOnBackground)){
+      pushError(errors, `${path}.privacy.blurOnBackground must be a boolean if present.`);
+    }
   }
 
   if(settings.weekStart !== undefined){
     if(!isNumber(settings.weekStart) || settings.weekStart < 0 || settings.weekStart > 6){
       pushError(errors, `${path}.weekStart must be a number between 0 and 6.`);
+    }
+  }
+  if(settings.nudgesEnabled !== undefined && !isBoolean(settings.nudgesEnabled)){
+    pushError(errors, `${path}.nudgesEnabled must be a boolean if present.`);
+  }
+
+  if(settings.supplementsMode !== undefined){
+    if(!isString(settings.supplementsMode)){
+      pushError(errors, `${path}.supplementsMode must be a string.`);
+    }else if(settings.supplementsMode && !["none", "essential", "advanced"].includes(settings.supplementsMode)){
+      pushError(errors, `${path}.supplementsMode must be \"none\", \"essential\", \"advanced\", or empty.`);
     }
   }
 
@@ -186,6 +203,14 @@ function validateRosters(rosters, errors, path){
       continue;
     }
     list.forEach((item, idx) => validateRosterItem(item, errors, `${path}.${key}[${idx}]`));
+  }
+
+  if(rosters.supplements !== undefined){
+    if(!Array.isArray(rosters.supplements)){
+      pushError(errors, `${path}.supplements must be an array when present.`);
+    }else{
+      rosters.supplements.forEach((item, idx) => validateRosterItem(item, errors, `${path}.supplements[${idx}]`));
+    }
   }
 }
 
@@ -255,6 +280,36 @@ function validateSegmentLog(segment, errors, path){
 }
 
 /**
+ * @param {unknown} supplements
+ * @param {string[]} errors
+ * @param {string} path
+ */
+function validateSupplementsLog(supplements, errors, path){
+  if(!isPlainObject(supplements)){
+    pushError(errors, `${path} must be an object.`);
+    return;
+  }
+
+  if(!isString(supplements.mode)){
+    pushError(errors, `${path}.mode must be a string.`);
+  }else if(supplements.mode && !["none", "essential", "advanced"].includes(supplements.mode)){
+    pushError(errors, `${path}.mode must be \"none\", \"essential\", \"advanced\", or empty.`);
+  }
+
+  if(!isStringArray(supplements.items)){
+    pushError(errors, `${path}.items must be an array of ItemId strings.`);
+  }
+
+  if(!isString(supplements.notes)){
+    pushError(errors, `${path}.notes must be a string.`);
+  }
+
+  if(supplements.tsLast !== undefined && !isString(supplements.tsLast)){
+    pushError(errors, `${path}.tsLast must be a string if present.`);
+  }
+}
+
+/**
  * @param {unknown} day
  * @param {string[]} errors
  * @param {string} path
@@ -302,6 +357,9 @@ function validateDayLog(day, errors, path){
 
   if(!isString(day.notes)){
     pushError(errors, `${path}.notes must be a string.`);
+  }
+  if(day.supplements !== undefined){
+    validateSupplementsLog(day.supplements, errors, `${path}.supplements`);
   }
   if(!isString(day.tsCreated)){
     pushError(errors, `${path}.tsCreated must be an ISO string.`);

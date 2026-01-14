@@ -1,0 +1,100 @@
+{
+  "version": 3,
+  "settings": {
+    "dayStart": "20:00",
+    "dayEnd": "04:00",
+    "ftnEnd": "12:00",
+    "lunchEnd": "16:00",
+    "dinnerEnd": "21:00",
+    "sunrise": "07:00",
+    "sunset": "17:00",
+    "focusMode": "nowfade",
+    "sunMode": "manual",
+    "phase": "strict",
+    "weekStart": 0,
+    "privacy": {
+      "appLock": false,
+      "redactHome": false,
+      "exportEncryptedByDefault": false
+    }
+  },
+  "rosters": {
+    "proteins": ["Beef", "Chicken"],
+    "carbs": ["White rice", "Fruit"],
+    "fats": ["Butter"],
+    "micros": ["Garlic"]
+  },
+  "logs": {
+    "2026-01-10": {
+      "segments": {
+        "ftn": {
+          "ftnMode": "ftn",
+          "proteins": ["Beef"],
+          "carbs": ["White rice"],
+          "fats": [],
+          "micros": [],
+          "collision": "auto",
+          "highFatMeal": "auto",
+          "seedOil": "",
+          "notes": "Felt great.",
+          "tsFirst": "2026-01-10T08:10:00.000Z",
+          "tsLast": "2026-01-10T08:10:00.000Z",
+          "rev": 1,
+          "status": "logged"
+        },
+        "lunch": {
+          "proteins": ["Chicken", "Salmon"],
+          "carbs": ["White rice"],
+          "fats": ["Butter"],
+          "micros": ["Garlic"],
+          "collision": "yes",
+          "highFatMeal": "no",
+          "seedOil": "yes",
+          "notes": "Added salmon (not in roster).",
+          "tsFirst": "2026-01-10T13:15:00.000Z",
+          "tsLast": "2026-01-10T13:18:00.000Z",
+          "rev": 2,
+          "status": "logged"
+        },
+        "dinner": {
+          "proteins": ["Beef"],
+          "carbs": [],
+          "fats": ["Butter"],
+          "micros": [],
+          "collision": "auto",
+          "highFatMeal": "yes",
+          "seedOil": "none",
+          "notes": "",
+          "tsFirst": "2026-01-10T20:05:00.000Z",
+          "tsLast": "2026-01-10T20:05:00.000Z",
+          "rev": 1,
+          "status": "logged"
+        },
+        "late": {
+          "proteins": [],
+          "carbs": [],
+          "fats": [],
+          "micros": [],
+          "collision": "auto",
+          "highFatMeal": "auto",
+          "seedOil": "",
+          "notes": "",
+          "tsFirst": "",
+          "tsLast": "",
+          "rev": 0,
+          "status": "unlogged"
+        }
+      },
+      "movedBeforeLunch": true,
+      "trained": false,
+      "highFatDay": false,
+      "energy": "4",
+      "mood": "3",
+      "cravings": "2",
+      "notes": "Wrap-around day test.",
+      "tsCreated": "2026-01-10T06:00:00.000Z",
+      "tsLast": "2026-01-10T20:05:00.000Z",
+      "rev": 3
+    }
+  }
+}

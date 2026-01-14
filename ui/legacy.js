@@ -4,6 +4,7 @@ import { effectiveSegmentFlags, normalizeTri } from "../domain/heuristics.js";
 import { computeSegmentWindows } from "../domain/time.js";
 import { searchRosterItems } from "../domain/search.js";
 import { computeRotationPicks } from "../domain/rotation.js";
+import { computeInsights } from "../domain/insights.js";
 import { computeWeeklySummary } from "../domain/weekly.js";
 
 export function createLegacyUI(ctx){
@@ -18,7 +19,8 @@ export function createLegacyUI(ctx){
     yyyyMmDd,
     addDays,
     dateFromKey,
-    getActiveDateKey
+    getActiveDateKey,
+    computeSunTimes
   } = helpers;
 
   const getState = ctx.getState;
@@ -32,6 +34,7 @@ export function createLegacyUI(ctx){
   let segmentEls = {};
   let notesDebounce = null;
   let segNotesTimer = null;
+  let supplementsNotesDebounce = null;
   let pendingImport = null;
   let pendingImportName = "";
   let diagSnapshotSeq = 0;
@@ -43,6 +46,9 @@ export function createLegacyUI(ctx){
   };
   let undoState = null;
   let undoTimer = null;
+  let reviewInsights = [];
+  let todayNudgeInsight = null;
+  let appLocked = false;
 
   function liftMinuteToTimeline(minute, start){
     return minute < start ? minute + 1440 : minute;
@@ -77,6 +83,10 @@ export function createLegacyUI(ctx){
     undoState = snapshot;
     showUndoToast(label);
     return result;
+  }
+
+  function refreshPrivacyBlur(){
+    applyPrivacyBlur();
   }
 
   // --- View switching ---
@@ -212,6 +222,284 @@ export function createLegacyUI(ctx){
   function dayHasDailyContent(day){
     if(!day) return false;
     return !!(day.movedBeforeLunch || day.trained || day.highFatDay || day.energy || day.mood || day.cravings || day.notes);
+  }
+
+  function formatLatLon(lat, lon){
+    if(!Number.isFinite(lat) || !Number.isFinite(lon)) return "";
+    return `${lat.toFixed(4)}, ${lon.toFixed(4)}`;
+  }
+
+  function setSunAutoStatus(text){
+    if(!els.sunAutoStatus) return;
+    els.sunAutoStatus.textContent = text || "";
+  }
+
+  function updateSunTimesFromLocation(){
+    if(!navigator || !navigator.geolocation){
+      setSunAutoStatus("Geolocation not available in this browser.");
+      showUndoToast("Geolocation unavailable");
+      if(getState().settings.sunMode === "auto"){
+        captureUndo("Sun mode manual", () => actions.updateSettings({ sunMode: "manual" }));
+        els.setSunMode.value = "manual";
+        els.setSunrise.disabled = false;
+        els.setSunset.disabled = false;
+      }
+      return;
+    }
+
+    setSunAutoStatus("Requesting location…");
+    navigator.geolocation.getCurrentPosition((pos) => {
+      const lat = pos.coords.latitude;
+      const lon = pos.coords.longitude;
+      const result = computeSunTimes(new Date(), lat, lon);
+      if(!result || result.status !== "ok" || result.sunrise == null || result.sunset == null){
+        const msg = result?.status === "polarDay"
+          ? "Sun never sets here today."
+          : result?.status === "polarNight"
+            ? "Sun never rises here today."
+            : "Could not compute sun times.";
+        setSunAutoStatus(msg);
+        showUndoToast("Sun times unavailable");
+        return;
+      }
+
+      const sunrise = minutesToTime(result.sunrise);
+      const sunset = minutesToTime(result.sunset);
+      captureUndo("Sun times updated", () => actions.updateSettings({
+        sunMode: "auto",
+        sunrise,
+        sunset,
+        lastKnownLat: lat,
+        lastKnownLon: lon
+      }));
+
+      els.setSunrise.value = sunrise;
+      els.setSunset.value = sunset;
+      els.setSunMode.value = "auto";
+      els.setSunrise.disabled = true;
+      els.setSunset.disabled = true;
+      setSunAutoStatus(`Updated for ${formatLatLon(lat, lon)}`);
+      showUndoToast("Sunrise/sunset updated");
+    }, (err) => {
+      const reason = err?.message ? `Location failed: ${err.message}` : "Location permission denied.";
+      setSunAutoStatus(reason);
+      showUndoToast("Location denied");
+      if(getState().settings.sunMode === "auto"){
+        captureUndo("Sun mode manual", () => actions.updateSettings({ sunMode: "manual" }));
+        els.setSunMode.value = "manual";
+        els.setSunrise.disabled = false;
+        els.setSunset.disabled = false;
+      }
+    }, {
+      enableHighAccuracy: false,
+      timeout: 10000,
+      maximumAge: 3600000
+    });
+  }
+
+  function applyPrivacyBlur(){
+    if(!els.privacyBlurOverlay) return;
+    const enabled = !!getState()?.settings?.privacy?.blurOnBackground;
+    const isHidden = (typeof document.visibilityState === "string")
+      ? document.visibilityState !== "visible"
+      : !!document.hidden;
+    const shouldShow = enabled && isHidden;
+    els.privacyBlurOverlay.classList.toggle("hidden", !shouldShow);
+    els.privacyBlurOverlay.setAttribute("aria-hidden", shouldShow ? "false" : "true");
+  }
+
+  function canUseCrypto(){
+    return !!(globalThis.crypto && crypto.subtle && crypto.getRandomValues);
+  }
+
+  function bytesToBase64(bytes){
+    let binary = "";
+    bytes.forEach((b) => {
+      binary += String.fromCharCode(b);
+    });
+    return btoa(binary);
+  }
+
+  function base64ToBytes(str){
+    try{
+      const binary = atob(str || "");
+      const out = new Uint8Array(binary.length);
+      for(let i = 0; i < binary.length; i++){
+        out[i] = binary.charCodeAt(i);
+      }
+      return out;
+    }catch(e){
+      return new Uint8Array();
+    }
+  }
+
+  function readAppLockRecord(){
+    try{
+      if(typeof localStorage === "undefined") return { hash: "", salt: "" };
+      return {
+        hash: localStorage.getItem(APP_LOCK_HASH_KEY) || "",
+        salt: localStorage.getItem(APP_LOCK_SALT_KEY) || ""
+      };
+    }catch(e){
+      return { hash: "", salt: "" };
+    }
+  }
+
+  function writeAppLockRecord(hash, salt){
+    try{
+      if(typeof localStorage === "undefined") return false;
+      localStorage.setItem(APP_LOCK_HASH_KEY, hash);
+      localStorage.setItem(APP_LOCK_SALT_KEY, salt);
+      return true;
+    }catch(e){
+      return false;
+    }
+  }
+
+  function clearAppLockRecord(){
+    try{
+      if(typeof localStorage === "undefined") return;
+      localStorage.removeItem(APP_LOCK_HASH_KEY);
+      localStorage.removeItem(APP_LOCK_SALT_KEY);
+    }catch(e){
+      // ignore
+    }
+  }
+
+  async function hashPasscode(passcode, saltBytes){
+    const passBytes = appLockEncoder.encode(String(passcode));
+    const data = new Uint8Array(saltBytes.length + passBytes.length);
+    data.set(saltBytes, 0);
+    data.set(passBytes, saltBytes.length);
+    const digest = await crypto.subtle.digest("SHA-256", data);
+    return bytesToBase64(new Uint8Array(digest));
+  }
+
+  function hasAppLockSecret(){
+    const record = readAppLockRecord();
+    return !!(record.hash && record.salt);
+  }
+
+  function isAppLockEnabled(){
+    return !!getState()?.settings?.privacy?.appLock;
+  }
+
+  async function verifyAppLockPasscode(passcode){
+    if(!canUseCrypto()) return false;
+    const record = readAppLockRecord();
+    if(!record.hash || !record.salt) return false;
+    const saltBytes = base64ToBytes(record.salt);
+    if(!saltBytes.length) return false;
+    const nextHash = await hashPasscode(passcode, saltBytes);
+    return nextHash === record.hash;
+  }
+
+  async function setAppLockPasscode(passcode){
+    if(!canUseCrypto()) return false;
+    const saltBytes = new Uint8Array(16);
+    crypto.getRandomValues(saltBytes);
+    const hash = await hashPasscode(passcode, saltBytes);
+    return writeAppLockRecord(hash, bytesToBase64(saltBytes));
+  }
+
+  function setAppLockMessage(msg){
+    if(!els.appLockMessage) return;
+    els.appLockMessage.textContent = msg || "";
+  }
+
+  function showAppLockOverlay(msg){
+    if(!els.appLockOverlay) return;
+    els.appLockOverlay.classList.remove("hidden");
+    els.appLockOverlay.setAttribute("aria-hidden", "false");
+    setAppLockMessage(msg || "");
+    if(els.appLockInput){
+      els.appLockInput.value = "";
+      setTimeout(() => els.appLockInput?.focus(), 50);
+    }
+  }
+
+  function hideAppLockOverlay(){
+    if(!els.appLockOverlay) return;
+    els.appLockOverlay.classList.add("hidden");
+    els.appLockOverlay.setAttribute("aria-hidden", "true");
+    setAppLockMessage("");
+  }
+
+  function refreshAppLock(){
+    if(!els.appLockOverlay) return;
+    const enabled = isAppLockEnabled();
+    const hasSecret = hasAppLockSecret();
+    if(!enabled || !hasSecret){
+      appLocked = false;
+      hideAppLockOverlay();
+      return;
+    }
+    if(appLocked){
+      showAppLockOverlay("Enter your passcode to continue.");
+    }else{
+      hideAppLockOverlay();
+    }
+  }
+
+  async function attemptUnlock(){
+    if(!els.appLockInput) return;
+    const passcode = els.appLockInput.value || "";
+    if(!passcode){
+      setAppLockMessage("Enter passcode.");
+      return;
+    }
+    const ok = await verifyAppLockPasscode(passcode);
+    if(ok){
+      appLocked = false;
+      refreshAppLock();
+    }else{
+      setAppLockMessage("Incorrect passcode.");
+      els.appLockInput.value = "";
+    }
+  }
+
+  function promptNewPasscode(){
+    const passcode = prompt("Set a passcode (4+ characters):");
+    if(!passcode) return null;
+    if(passcode.length < 4){
+      alert("Passcode too short.");
+      return null;
+    }
+    const confirmPass = prompt("Confirm passcode:");
+    if(confirmPass !== passcode){
+      alert("Passcodes did not match.");
+      return null;
+    }
+    return passcode;
+  }
+
+  async function ensureAppLockPasscode(){
+    if(!canUseCrypto()){
+      alert("App lock requires WebCrypto.");
+      return false;
+    }
+    const passcode = promptNewPasscode();
+    if(!passcode) return false;
+    const stored = await setAppLockPasscode(passcode);
+    if(!stored){
+      alert("Failed to store passcode.");
+      return false;
+    }
+    return true;
+  }
+
+  async function verifyExistingPasscode(actionLabel){
+    if(!canUseCrypto()){
+      alert("App lock requires WebCrypto.");
+      return false;
+    }
+    const passcode = prompt(actionLabel || "Enter passcode:");
+    if(!passcode) return false;
+    const ok = await verifyAppLockPasscode(passcode);
+    if(!ok){
+      alert("Incorrect passcode.");
+    }
+    return ok;
   }
 
   function getSegmentTimestamp(seg, day){
@@ -795,6 +1083,101 @@ export function createLegacyUI(ctx){
     els.notes.value = getDay(dateKey).notes || "";
   }
 
+  function renderSupplements(dateKey){
+    if(!els.supplementsPanel) return;
+    const state = getState();
+    const redacted = !!state.settings?.privacy?.redactHome;
+    const mode = state.settings?.supplementsMode || "none";
+    const enabled = mode && mode !== "none";
+    els.supplementsPanel.hidden = !enabled || redacted;
+    if(!enabled || redacted) return;
+
+    if(els.supplementsModeLabel){
+      const label = (mode === "essential") ? "Essential" : (mode === "advanced" ? "Advanced" : "Off");
+      els.supplementsModeLabel.textContent = label;
+    }
+
+    const day = getDay(dateKey);
+    const supp = day.supplements || { mode, items: [], notes: "", tsLast: "" };
+    const selected = new Set(Array.isArray(supp.items) ? supp.items : []);
+
+    if(els.supplementsChips){
+      const list = (Array.isArray(state.rosters?.supplements) ? state.rosters.supplements : [])
+        .filter((item) => item && !item.archived)
+        .slice()
+        .sort((a, b) => {
+          const pin = (b?.pinned ? 1 : 0) - (a?.pinned ? 1 : 0);
+          if(pin !== 0) return pin;
+          return String(a?.label || "").localeCompare(String(b?.label || ""));
+        });
+
+      if(list.length === 0){
+        els.supplementsChips.innerHTML = `<div class="tiny muted">Add supplements in Settings.</div>`;
+      }else{
+        els.supplementsChips.innerHTML = list.map((item) => {
+          const active = selected.has(item.id);
+          const pinned = item.pinned ? " pinned" : "";
+          return `<button class="chip${active ? " active" : ""}${pinned}" data-id="${escapeHtml(item.id)}" type="button">${escapeHtml(item.label || item.id)}</button>`;
+        }).join("");
+        els.supplementsChips.querySelectorAll(".chip").forEach((btn) => {
+          btn.addEventListener("click", () => {
+            const itemId = btn.dataset.id;
+            if(!itemId || typeof actions.toggleSupplementItem !== "function") return;
+            captureUndo("Supplement toggled", () => actions.toggleSupplementItem(dateKey, itemId));
+            renderSupplements(dateKey);
+          });
+        });
+      }
+    }
+
+    if(els.supplementsNotes){
+      els.supplementsNotes.value = supp.notes || "";
+    }
+  }
+
+  function applyHomeRedaction(){
+    const redacted = !!getState().settings?.privacy?.redactHome;
+    if(els.notesBlock) els.notesBlock.hidden = redacted;
+    if(els.redactionBanner) els.redactionBanner.hidden = !redacted;
+    document.body.classList.toggle("redact-home", redacted);
+  }
+
+  async function promptForPasscode(actionLabel){
+    const label = actionLabel ? `${actionLabel} passcode` : "Set passcode";
+    const passphrase = prompt(`${label}:`);
+    if(!passphrase) return null;
+    const confirmPass = prompt("Confirm passcode:");
+    if(confirmPass !== passphrase){
+      alert("Passcodes did not match.");
+      return null;
+    }
+    const hash = await hashPasscode(passphrase);
+    if(!hash){
+      alert("Passcode hashing unavailable in this browser.");
+      return null;
+    }
+    return hash;
+  }
+
+  async function attemptAppUnlock(){
+    if(!canUseCrypto()){
+      setAppLockMessage("WebCrypto unavailable.");
+      return;
+    }
+    const passphrase = els.appLockInput?.value || "";
+    if(!passphrase){
+      setAppLockMessage("Enter your passcode.");
+      return;
+    }
+    const ok = await verifyAppLockPasscode(passphrase);
+    if(!ok){
+      setAppLockMessage("Incorrect passcode.");
+      return;
+    }
+    appLocked = false;
+    hideAppLockOverlay();
+  }
+
   function renderToday(){
     const dateKey = yyyyMmDd(getCurrentDate());
     els.datePicker.value = dateKey;
@@ -812,7 +1195,40 @@ export function createLegacyUI(ctx){
     renderTimeline(dateKey, day);
     renderRituals(dateKey);
     renderScales(dateKey);
+    renderSupplements(dateKey);
+    renderTodayNudge(dateKey);
     wireNotes(dateKey);
+    applyHomeRedaction();
+  }
+
+  function renderTodayNudge(dateKey){
+    if(!els.todayNudge) return;
+    const settings = getState().settings || {};
+    if(!settings.nudgesEnabled){
+      todayNudgeInsight = null;
+      els.todayNudge.hidden = true;
+      return;
+    }
+
+    const insights = computeInsights({
+      state: getState(),
+      anchorDate: dateFromKey(dateKey),
+      includeDay: true,
+      includeWeek: false
+    }).filter((insight) => insight.scope === "day");
+
+    const pick = insights[0];
+    if(!pick){
+      todayNudgeInsight = null;
+      els.todayNudge.hidden = true;
+      return;
+    }
+
+    todayNudgeInsight = pick;
+    els.todayNudge.hidden = false;
+    if(els.todayNudgeTitle) els.todayNudgeTitle.textContent = pick.title || "Insight";
+    if(els.todayNudgeMessage) els.todayNudgeMessage.textContent = pick.message || "";
+    if(els.todayNudgeReason) els.todayNudgeReason.textContent = pick.reason ? `Reason: ${pick.reason}` : "";
   }
 
   function mergeDayDiversity(day){
@@ -991,6 +1407,19 @@ export function createLegacyUI(ctx){
       });
     });
 
+    if(els.exportBtn){
+      const encDefault = !!(state.settings?.privacy && state.settings.privacy.exportEncryptedByDefault);
+      const primaryMode = encDefault ? "encrypted" : "plain";
+      const altMode = encDefault ? "plain" : "encrypted";
+      els.exportBtn.textContent = encDefault ? "Export encrypted" : "Export JSON";
+      els.exportBtn.dataset.mode = primaryMode;
+      if(els.exportAltBtn){
+        els.exportAltBtn.textContent = encDefault ? "Export JSON" : "Export encrypted";
+        els.exportAltBtn.dataset.mode = altMode;
+        els.exportAltBtn.hidden = false;
+      }
+    }
+
     renderDiagnostics();
   }
 
@@ -1052,6 +1481,45 @@ export function createLegacyUI(ctx){
         `;
       }).join("");
       els.reviewCorrelations.innerHTML = rows || `<div class="tiny muted">No correlations yet.</div>`;
+    }
+
+    if(els.reviewInsights){
+      reviewInsights = computeInsights({ state, anchorDate: anchor, includeDay: true, includeWeek: true });
+      const dayInsights = reviewInsights.filter((insight) => insight.scope === "day");
+      const weekInsights = reviewInsights.filter((insight) => insight.scope === "week");
+      const toneLabel = (tone) => {
+        if(tone === "warn") return "Warn";
+        if(tone === "nudge") return "Nudge";
+        return "Info";
+      };
+      const renderCard = (entry) => {
+        const tone = entry.tone || "info";
+        return `
+          <div class="insight-card tone-${escapeHtml(tone)}">
+            <div class="insight-header">
+              <div class="insight-meta">${escapeHtml(toneLabel(tone))}</div>
+              <button class="btn ghost tinybtn" data-action="dismiss-insight" data-insight-id="${escapeHtml(entry.id)}" type="button">Dismiss</button>
+            </div>
+            <div class="insight-title">${escapeHtml(entry.title || "")}</div>
+            <div class="insight-message">${escapeHtml(entry.message || "")}</div>
+            <div class="insight-reason">Reason: ${escapeHtml(entry.reason || "")}</div>
+          </div>
+        `;
+      };
+      const renderGroup = (label, items) => `
+        <div class="insight-group">
+          <div class="insight-group-title">${escapeHtml(label)}</div>
+          ${items.map(renderCard).join("")}
+        </div>
+      `;
+      const blocks = [];
+      if(dayInsights.length){
+        blocks.push(renderGroup(`Day • ${dayInsights[0].scopeKey}`, dayInsights));
+      }
+      if(weekInsights.length){
+        blocks.push(renderGroup(`Week of ${weekInsights[0].scopeKey}`, weekInsights));
+      }
+      els.reviewInsights.innerHTML = blocks.join("") || `<div class="tiny muted">No insights yet.</div>`;
     }
 
     const head = `
@@ -1345,15 +1813,63 @@ export function createLegacyUI(ctx){
       const weekStart = Number.isFinite(s.weekStart) ? s.weekStart : 0;
       els.setWeekStart.value = String(weekStart);
     }
+    if(els.setSupplementsMode){
+      els.setSupplementsMode.value = s.supplementsMode || "none";
+    }
 
     const autoSun = (s.sunMode === "auto");
     els.setSunrise.disabled = autoSun;
     els.setSunset.disabled = autoSun;
+    if(els.sunAutoBtn){
+      els.sunAutoBtn.disabled = !(navigator && navigator.geolocation);
+    }
+    if(autoSun){
+      if(Number.isFinite(s.lastKnownLat) && Number.isFinite(s.lastKnownLon)){
+        setSunAutoStatus(`Auto active • ${formatLatLon(s.lastKnownLat, s.lastKnownLon)}`);
+      }else{
+        setSunAutoStatus("Auto active • tap Update from location");
+      }
+    }else{
+      setSunAutoStatus("Auto off • tap Update from location to enable");
+    }
+
+    if(els.privacyBlurToggle){
+      els.privacyBlurToggle.checked = !!(s.privacy && s.privacy.blurOnBackground);
+    }
+    if(els.privacyAppLockToggle){
+      els.privacyAppLockToggle.checked = !!(s.privacy && s.privacy.appLock);
+    }
+    if(els.appLockSetBtn){
+      els.appLockSetBtn.disabled = !canUseCrypto();
+      const hasPasscode = hasAppLockSecret();
+      els.appLockSetBtn.textContent = hasPasscode ? "Change passcode" : "Set passcode";
+    }
+    if(els.privacyRedactToggle){
+      els.privacyRedactToggle.checked = !!(s.privacy && s.privacy.redactHome);
+    }
+    if(els.privacyEncryptedToggle){
+      els.privacyEncryptedToggle.checked = !!(s.privacy && s.privacy.exportEncryptedByDefault);
+    }
+    if(els.todayNudgeToggle){
+      els.todayNudgeToggle.checked = !!s.nudgesEnabled;
+    }
+    refreshPrivacyBlur();
 
     renderRosterList("proteins", els.rosterProteins);
     renderRosterList("carbs", els.rosterCarbs);
     renderRosterList("fats", els.rosterFats);
     renderRosterList("micros", els.rosterMicros);
+    if(els.rosterSupplements){
+      const enabled = !!(s.supplementsMode && s.supplementsMode !== "none");
+      if(els.rosterSupplementsBlock){
+        els.rosterSupplementsBlock.hidden = !enabled;
+      }
+      if(enabled){
+        renderRosterList("supplements", els.rosterSupplements);
+      }else{
+        els.rosterSupplements.innerHTML = "";
+      }
+    }
   }
 
   function renderAll(){
@@ -1361,6 +1877,7 @@ export function createLegacyUI(ctx){
     renderHistory();
     renderReview();
     renderSettings();
+    applyAppLock();
   }
 
   function wire(){
@@ -1369,6 +1886,33 @@ export function createLegacyUI(ctx){
     els.tabHistory.addEventListener("click", () => { setActiveTab("history"); renderHistory(); });
     els.tabReview.addEventListener("click", () => { setActiveTab("review"); renderReview(); });
     els.tabSettings.addEventListener("click", () => { setActiveTab("settings"); renderSettings(); });
+
+    if(els.appLockSubmit){
+      els.appLockSubmit.addEventListener("click", () => {
+        attemptUnlock();
+      });
+    }
+    if(els.appLockInput){
+      els.appLockInput.addEventListener("keydown", (e) => {
+        if(e.key === "Enter"){
+          attemptUnlock();
+        }
+      });
+    }
+
+    if(els.reviewInsights){
+      els.reviewInsights.addEventListener("click", (e) => {
+        const btn = e.target.closest("button[data-action='dismiss-insight']");
+        if(!btn) return;
+        if(typeof actions.dismissInsight !== "function") return;
+        const insightId = btn.dataset.insightId || "";
+        if(!insightId) return;
+        const insight = reviewInsights.find((item) => item.id === insightId);
+        if(!insight) return;
+        actions.dismissInsight(insight);
+        renderReview();
+      });
+    }
 
     // date nav
     els.prevDay.addEventListener("click", () => { setCurrentDate(addDays(getCurrentDate(), -1)); renderToday(); });
@@ -1382,22 +1926,11 @@ export function createLegacyUI(ctx){
     if(els.copyYesterday){
       els.copyYesterday.addEventListener("click", copyYesterdayIntoToday);
     }
-
-    if(els.copyYesterday){
-      els.copyYesterday.addEventListener("click", () => {
-        const dateKey = yyyyMmDd(getCurrentDate());
-        if(!actions.canCopyYesterday || !actions.copyYesterday){
-          showUndoToast("Copy not available");
-          return;
-        }
-        if(!actions.canCopyYesterday(dateKey)){
-          undoState = null;
-          showUndoToast("No logs yesterday");
-          return;
-        }
-        const ok = confirm("Copy yesterday's segments into this day? This will overwrite today's segments.");
-        if(!ok) return;
-        captureUndo("Copied yesterday", () => actions.copyYesterday(dateKey));
+    if(els.todayNudgeDismiss){
+      els.todayNudgeDismiss.addEventListener("click", () => {
+        if(!todayNudgeInsight) return;
+        actions.dismissInsight?.(todayNudgeInsight);
+        todayNudgeInsight = null;
         renderToday();
       });
     }
@@ -1434,8 +1967,30 @@ export function createLegacyUI(ctx){
       }, 320);
     });
 
+    if(els.supplementsNotes){
+      els.supplementsNotes.addEventListener("input", () => {
+        const dateKey = yyyyMmDd(getCurrentDate());
+        clearTimeout(supplementsNotesDebounce);
+        supplementsNotesDebounce = setTimeout(() => {
+          if(typeof actions.setSupplementsNotes !== "function") return;
+          captureUndo("Supplements notes updated", () => actions.setSupplementsNotes(dateKey, els.supplementsNotes.value || ""));
+        }, 320);
+      });
+    }
+
     // history export/import
-    els.exportBtn.addEventListener("click", actions.exportState);
+    if(els.exportBtn){
+      els.exportBtn.addEventListener("click", (e) => {
+        const mode = e.currentTarget?.dataset?.mode || "";
+        actions.exportState(mode || undefined);
+      });
+    }
+    if(els.exportAltBtn){
+      els.exportAltBtn.addEventListener("click", (e) => {
+        const mode = e.currentTarget?.dataset?.mode || "";
+        actions.exportState(mode || undefined);
+      });
+    }
     if(els.importMode){
       setSegmentedActive(els.importMode, "merge");
       els.importMode.addEventListener("click", (e) => {
@@ -1529,9 +2084,56 @@ export function createLegacyUI(ctx){
       });
     }
 
+    if(els.appLockSetBtn){
+      els.appLockSetBtn.addEventListener("click", async () => {
+        if(!canUseCrypto()){
+          alert("App lock requires WebCrypto.");
+          return;
+        }
+        const enabled = isAppLockEnabled() || !!els.privacyAppLockToggle?.checked;
+        if(enabled && hasAppLockSecret()){
+          const ok = await verifyExistingPasscode("Enter current passcode:");
+          if(!ok) return;
+        }
+        const ok = await ensureAppLockPasscode();
+        if(ok){
+          if(els.privacyAppLockToggle && !els.privacyAppLockToggle.checked){
+            els.privacyAppLockToggle.checked = true;
+          }
+          showUndoToast(enabled ? "Passcode changed" : "Passcode set");
+        }
+      });
+    }
+
     // settings save/reset
-    els.saveSettings.addEventListener("click", () => {
+    els.saveSettings.addEventListener("click", async () => {
       const parsedWeekStart = Number.parseInt(els.setWeekStart?.value || "", 10);
+      const existingPrivacy = getState().settings?.privacy || {};
+      let nextAppLock = !!els.privacyAppLockToggle?.checked;
+      const wasAppLock = !!existingPrivacy.appLock;
+      const hasPasscode = hasAppLockSecret();
+      const blurOnBackground = !!els.privacyBlurToggle?.checked;
+      const redactHome = !!els.privacyRedactToggle?.checked;
+      const exportEncryptedByDefault = !!els.privacyEncryptedToggle?.checked;
+      const nudgesEnabled = !!els.todayNudgeToggle?.checked;
+
+      if(nextAppLock && !hasPasscode){
+        const ok = await ensureAppLockPasscode();
+        if(!ok){
+          nextAppLock = false;
+          if(els.privacyAppLockToggle) els.privacyAppLockToggle.checked = false;
+        }
+      }else if(!nextAppLock && wasAppLock){
+        const ok = await verifyExistingPasscode("Enter passcode to disable app lock:");
+        if(!ok){
+          nextAppLock = true;
+          if(els.privacyAppLockToggle) els.privacyAppLockToggle.checked = true;
+        }else{
+          clearAppLockRecord();
+          appLocked = false;
+        }
+      }
+
       const s = {
         dayStart: els.setDayStart.value || defaults.DEFAULT_SETTINGS.dayStart,
         dayEnd: els.setDayEnd.value || defaults.DEFAULT_SETTINGS.dayEnd,
@@ -1543,11 +2145,20 @@ export function createLegacyUI(ctx){
         sunMode: els.setSunMode.value || "manual",
         phase: els.setPhase.value || "",
         focusMode: els.setFocusMode.value || "nowfade",
-        weekStart: Number.isFinite(parsedWeekStart) ? parsedWeekStart : defaults.DEFAULT_SETTINGS.weekStart
+        weekStart: Number.isFinite(parsedWeekStart) ? parsedWeekStart : defaults.DEFAULT_SETTINGS.weekStart,
+        nudgesEnabled,
+        supplementsMode: els.setSupplementsMode?.value || "none",
+        privacy: {
+          appLock: nextAppLock,
+          redactHome,
+          exportEncryptedByDefault,
+          blurOnBackground
+        }
       };
 
       captureUndo("Settings saved", () => actions.updateSettings(s));
       renderAll();
+      refreshAppLock();
       alert("Saved.");
     });
 
@@ -1555,7 +2166,83 @@ export function createLegacyUI(ctx){
       const autoSun = els.setSunMode.value === "auto";
       els.setSunrise.disabled = autoSun;
       els.setSunset.disabled = autoSun;
+      if(autoSun){
+        setSunAutoStatus("Auto active • tap Update from location");
+      }else{
+        setSunAutoStatus("Auto off • tap Update from location to enable");
+      }
     });
+
+    if(els.sunAutoBtn){
+      els.sunAutoBtn.addEventListener("click", updateSunTimesFromLocation);
+    }
+
+    if(els.privacyAppLockToggle){
+      els.privacyAppLockToggle.addEventListener("change", async () => {
+        const enabled = !!els.privacyAppLockToggle.checked;
+        if(enabled){
+          if(!hasAppLockSecret()){
+            const ok = await ensureAppLockPasscode();
+            if(!ok){
+              els.privacyAppLockToggle.checked = false;
+              return;
+            }
+          }
+          captureUndo("App lock enabled", () => actions.updateSettings({ privacy: { appLock: true } }));
+          appLocked = false;
+          refreshAppLock();
+          return;
+        }
+        captureUndo("App lock disabled", () => actions.updateSettings({ privacy: { appLock: false } }));
+        appLocked = false;
+        refreshAppLock();
+      });
+    }
+
+    if(els.appLockSetBtn){
+      els.appLockSetBtn.addEventListener("click", async () => {
+        if(hasAppLockSecret()){
+          const ok = await verifyExistingPasscode("Enter current passcode:");
+          if(!ok) return;
+        }
+        const stored = await ensureAppLockPasscode();
+        if(!stored) return;
+        captureUndo("Passcode updated", () => actions.updateSettings({ privacy: { appLock: true } }));
+        if(els.privacyAppLockToggle) els.privacyAppLockToggle.checked = true;
+        appLocked = false;
+        refreshAppLock();
+      });
+    }
+
+    if(els.privacyBlurToggle){
+      els.privacyBlurToggle.addEventListener("change", () => {
+        const enabled = !!els.privacyBlurToggle.checked;
+        captureUndo("Privacy blur updated", () => actions.updateSettings({ privacy: { blurOnBackground: enabled } }));
+        refreshPrivacyBlur();
+      });
+    }
+
+    if(els.privacyRedactToggle){
+      els.privacyRedactToggle.addEventListener("change", () => {
+        const enabled = !!els.privacyRedactToggle.checked;
+        captureUndo("Home redaction updated", () => actions.updateSettings({ privacy: { redactHome: enabled } }));
+        renderToday();
+      });
+    }
+
+    document.addEventListener("visibilitychange", refreshPrivacyBlur);
+
+    if(els.appLockSubmit){
+      els.appLockSubmit.addEventListener("click", attemptAppUnlock);
+    }
+    if(els.appLockInput){
+      els.appLockInput.addEventListener("keydown", (e) => {
+        if(e.key === "Enter"){
+          e.preventDefault();
+          attemptAppUnlock();
+        }
+      });
+    }
 
     els.resetToday.addEventListener("click", () => {
       const k = getActiveDateKey();
@@ -1600,9 +2287,293 @@ export function createLegacyUI(ctx){
 
     // sheet chips (event delegation)
     const wireChipContainer = (container, category) => {
+      let longPressTimer = null;
+      let longPressFired = false;
+
+      const clearLongPress = () => {
+        if(longPressTimer) clearTimeout(longPressTimer);
+        longPressTimer = null;
+      };
+
+      container.addEventListener("pointerdown", (e) => {
+        if(e.button !== undefined && e.button !== 0) return;
+        const btn = e.target.closest(".chip");
+        if(!btn) return;
+        if(btn.dataset.add === "1") return;
+        const item = btn.dataset.item;
+        if(!item) return;
+        longPressFired = false;
+        clearLongPress();
+        longPressTimer = setTimeout(() => {
+          longPressFired = true;
+          btn.dataset.longpress = "1";
+          captureUndo("Roster pin toggled", () => actions.toggleRosterPinned(category, item));
+          renderSettings();
+          renderCategoryChips(category);
+        }, 520);
+      });
+
+      container.addEventListener("pointerup", clearLongPress);
+      container.addEventListener("pointerleave", clearLongPress);
+      container.addEventListener("pointercancel", clearLongPress);
+
       container.addEventListener("click", (e) => {
         const btn = e.target.closest(".chip");
         if(!btn) return;
+        if(longPressFired || btn.dataset.longpress === "1"){
+          longPressFired = false;
+          btn.dataset.longpress = "";
+          return;
+        }
+        const dateKey = yyyyMmDd(getCurrentDate());
+        const currentSegmentId = getCurrentSegmentId();
+        if(!currentSegmentId) return;
+
+        if(btn.dataset.add === "1"){
+          const label = btn.dataset.label;
+          if(!label) return;
+          captureUndo("Item added", () => {
+            const entry = actions.addRosterItem(category, label);
+            if(entry && entry.id){
+              actions.toggleSegmentItem(dateKey, currentSegmentId, category, entry.id);
+            }
+          });
+          rosterSearch[category] = "";
+          const input = searchInputs[category];
+          if(input) input.value = "";
+          openSegment(dateKey, currentSegmentId);
+          renderSettings();
+          return;
+        }
+
+        const item = btn.dataset.item;
+        if(!item) return;
+        captureUndo("Segment updated", () => actions.toggleSegmentItem(dateKey, currentSegmentId, category, item));
+        // quick UI update
+        btn.classList.toggle("active");
+        refreshSegmentStatus(dateKey, currentSegmentId);
+        updateSegmentVisual(dateKey, currentSegmentId);
+        updateSheetHints(dateKey, currentSegmentId);
+      });
+    };
+
+    wireChipContainer(els.chipsProteins, "proteins");
+    wireChipContainer(els.chipsCarbs, "carbs");
+    wireChipContainer(els.chipsFats, "fats");
+    wireChipContainer(els.chipsMicros, "micros");
+
+    // FTN mode segmented
+    els.ftnModeSeg.addEventListener("click", (e) => {
+      const btn = e.target.closest(".seg-btn");
+      if(!btn) return;
+      const dateKey = yyyyMmDd(getCurrentDate());
+      setSegmentedActive(els.ftnModeSeg, btn.dataset.value);
+      captureUndo("FTN mode updated", () => actions.setSegmentField(dateKey, "ftn", "ftnMode", btn.dataset.value));
+      refreshSegmentStatus(dateKey, "ftn");
+      updateSegmentVisual(dateKey, "ftn");
+    });
+
+    // segment notes
+    els.segNotes.addEventListener("input", () => {
+      const currentSegmentId = getCurrentSegmentId();
+      if(!currentSegmentId) return;
+      const dateKey = yyyyMmDd(getCurrentDate());
+      clearTimeout(segNotesTimer);
+      segNotesTimer = setTimeout(() => {
+        captureUndo("Segment notes updated", () => actions.setSegmentField(dateKey, currentSegmentId, "notes", els.segNotes.value || ""));
+        refreshSegmentStatus(dateKey, currentSegmentId);
+        updateSegmentVisual(dateKey, currentSegmentId);
+      }, 320);
+    });
+
+    if(els.undoAction){
+      els.undoAction.addEventListener("click", () => {
+        if(!undoState) return;
+        actions.replaceState(undoState);
+        undoState = null;
+        hideUndoToast();
+        renderAll();
+      });
+    }
+  }
+
+  function startTicks(){
+    // tick (sun position + now marker)
+    setInterval(() => {
+      const dateKey = yyyyMmDd(getCurrentDate());
+      if(dateKey === getActiveDateKey()){
+        renderSolarArc(dateKey);
+        applyFutureFog(dateKey);
+      }
+    }, 20_000);
+  }
+
+  function init(){
+    wire();
+    setActiveTab("today");
+    renderAll();
+    refreshAppLock();
+    startTicks();
+  }
+
+  return {
+    renderAll,
+    renderToday,
+    renderHistory,
+    renderSettings,
+    renderTimeline,
+    renderSolarArc,
+    renderNowMarker,
+    openSegment,
+    closeSegment,
+    init
+  };
+}
+            els.privacyAppLockToggle.checked = false;
+            return;
+          }
+          captureUndo("App lock enabled", () => actions.updateSettings({ privacy: { appLock: true, appLockHash: nextHash } }));
+          appLockUnlocked = true;
+          refreshAppLock();
+          return;
+        }
+        captureUndo("App lock disabled", () => actions.updateSettings({ privacy: { appLock: false } }));
+        appLockUnlocked = true;
+        refreshAppLock();
+      });
+    }
+
+    if(els.appLockSetBtn){
+      els.appLockSetBtn.addEventListener("click", async () => {
+        const nextHash = await promptForPasscode("Set");
+        if(!nextHash) return;
+        captureUndo("Passcode updated", () => actions.updateSettings({ privacy: { appLock: true, appLockHash: nextHash } }));
+        if(els.privacyAppLockToggle) els.privacyAppLockToggle.checked = true;
+        appLockUnlocked = true;
+        refreshAppLock();
+      });
+    }
+
+    if(els.privacyBlurToggle){
+      els.privacyBlurToggle.addEventListener("change", () => {
+        const enabled = !!els.privacyBlurToggle.checked;
+        captureUndo("Privacy blur updated", () => actions.updateSettings({ privacy: { blurOnBackground: enabled } }));
+        refreshPrivacyBlur();
+      });
+    }
+
+    if(els.privacyRedactToggle){
+      els.privacyRedactToggle.addEventListener("change", () => {
+        const enabled = !!els.privacyRedactToggle.checked;
+        captureUndo("Home redaction updated", () => actions.updateSettings({ privacy: { redactHome: enabled } }));
+        renderToday();
+      });
+    }
+
+    document.addEventListener("visibilitychange", () => {
+      refreshPrivacyBlur();
+      if(isAppLockEnabled() && document.hidden){
+        appLocked = true;
+      }
+      refreshAppLock();
+    });
+
+    if(els.appLockSubmit){
+      els.appLockSubmit.addEventListener("click", attemptAppUnlock);
+    }
+    if(els.appLockInput){
+      els.appLockInput.addEventListener("keydown", (e) => {
+        if(e.key === "Enter"){
+          e.preventDefault();
+          attemptAppUnlock();
+        }
+      });
+    }
+
+    els.resetToday.addEventListener("click", () => {
+      const k = getActiveDateKey();
+      if(confirm("Reset today's logs?")){
+        captureUndo("Day reset", () => actions.resetDay(k));
+        setCurrentDate(dateFromKey(k));
+        renderAll();
+      }
+    });
+
+    // roster add buttons (Settings)
+    document.querySelectorAll('[data-roster]').forEach(btn => {
+      btn.addEventListener("click", () => {
+        const cat = btn.dataset.roster;
+        const name = prompt(`Add to ${cat}:`);
+        if(!name) return;
+        captureUndo("Roster item added", () => actions.addRosterItem(cat, name));
+        renderSettings();
+        renderToday();
+      });
+    });
+
+    wireRosterContainer("proteins", els.rosterProteins);
+    wireRosterContainer("carbs", els.rosterCarbs);
+    wireRosterContainer("fats", els.rosterFats);
+    wireRosterContainer("micros", els.rosterMicros);
+    if(els.rosterSupplements){
+      wireRosterContainer("supplements", els.rosterSupplements);
+    }
+
+    // sheet close
+    els.sheetBackdrop.addEventListener("click", closeSegment);
+    els.closeSheet.addEventListener("click", closeSegment);
+    els.doneSegment.addEventListener("click", closeSegment);
+
+    // sheet clear
+    els.clearSegment.addEventListener("click", () => {
+      const currentSegmentId = getCurrentSegmentId();
+      if(!currentSegmentId) return;
+      const dateKey = yyyyMmDd(getCurrentDate());
+      captureUndo("Segment cleared", () => actions.clearSegment(dateKey, currentSegmentId));
+      openSegment(dateKey, currentSegmentId); // refresh UI
+      updateSegmentVisual(dateKey, currentSegmentId);
+    });
+
+    // sheet chips (event delegation)
+    const wireChipContainer = (container, category) => {
+      let longPressTimer = null;
+      let longPressFired = false;
+
+      const clearLongPress = () => {
+        if(longPressTimer) clearTimeout(longPressTimer);
+        longPressTimer = null;
+      };
+
+      container.addEventListener("pointerdown", (e) => {
+        if(e.button !== undefined && e.button !== 0) return;
+        const btn = e.target.closest(".chip");
+        if(!btn) return;
+        if(btn.dataset.add === "1") return;
+        const item = btn.dataset.item;
+        if(!item) return;
+        longPressFired = false;
+        clearLongPress();
+        longPressTimer = setTimeout(() => {
+          longPressFired = true;
+          btn.dataset.longpress = "1";
+          captureUndo("Roster pin toggled", () => actions.toggleRosterPinned(category, item));
+          renderSettings();
+          renderCategoryChips(category);
+        }, 520);
+      });
+
+      container.addEventListener("pointerup", clearLongPress);
+      container.addEventListener("pointerleave", clearLongPress);
+      container.addEventListener("pointercancel", clearLongPress);
+
+      container.addEventListener("click", (e) => {
+        const btn = e.target.closest(".chip");
+        if(!btn) return;
+        if(longPressFired || btn.dataset.longpress === "1"){
+          longPressFired = false;
+          btn.dataset.longpress = "";
+          return;
+        }
         const dateKey = yyyyMmDd(getCurrentDate());
         const currentSegmentId = getCurrentSegmentId();
         if(!currentSegmentId) return;
@@ -1797,6 +2768,8 @@ export function createLegacyUI(ctx){
     wire();
     setActiveTab("today");
     renderAll();
+    appLocked = isAppLockEnabled() && hasAppLockSecret();
+    refreshAppLock();
     startTicks();
   }
 

@@ -45,12 +45,29 @@ export function getElements(){
     moodScale: document.getElementById("moodScale"),
     cravingsScale: document.getElementById("cravingsScale"),
 
+    todayNudge: document.getElementById("todayNudge"),
+    todayNudgeTitle: document.getElementById("todayNudgeTitle"),
+    todayNudgeMessage: document.getElementById("todayNudgeMessage"),
+    todayNudgeReason: document.getElementById("todayNudgeReason"),
+    todayNudgeDismiss: document.getElementById("todayNudgeDismiss"),
+
     // daily notes
     notes: document.getElementById("notes"),
+    notesBlock: document.getElementById("notesBlock"),
+    redactionBanner: document.getElementById("redactionBanner"),
+    appLockOverlay: document.getElementById("appLockOverlay"),
+    appLockInput: document.getElementById("appLockInput"),
+    appLockSubmit: document.getElementById("appLockSubmit"),
+    appLockMessage: document.getElementById("appLockMessage"),
+    supplementsPanel: document.getElementById("supplementsPanel"),
+    supplementsModeLabel: document.getElementById("supplementsModeLabel"),
+    supplementsChips: document.getElementById("supplementsChips"),
+    supplementsNotes: document.getElementById("supplementsNotes"),
 
     // history
     historyList: document.getElementById("historyList"),
     exportBtn: document.getElementById("exportBtn"),
+    exportAltBtn: document.getElementById("exportAltBtn"),
     importFile: document.getElementById("importFile"),
     importMode: document.getElementById("importMode"),
     importApply: document.getElementById("importApply"),
@@ -68,6 +85,7 @@ export function getElements(){
     reviewPhase: document.getElementById("reviewPhase"),
     reviewIssues: document.getElementById("reviewIssues"),
     reviewCorrelations: document.getElementById("reviewCorrelations"),
+    reviewInsights: document.getElementById("reviewInsights"),
     coverageMatrix: document.getElementById("coverageMatrix"),
     rotationPicks: document.getElementById("rotationPicks"),
 
@@ -84,16 +102,34 @@ export function getElements(){
     setSunrise: document.getElementById("setSunrise"),
     setSunset: document.getElementById("setSunset"),
     setSunMode: document.getElementById("setSunMode"),
+    sunAutoBtn: document.getElementById("sunAutoBtn"),
+    sunAutoStatus: document.getElementById("sunAutoStatus"),
     setPhase: document.getElementById("setPhase"),
     setFocusMode: document.getElementById("setFocusMode"),
     setWeekStart: document.getElementById("setWeekStart"),
+    setSupplementsMode: document.getElementById("setSupplementsMode"),
     saveSettings: document.getElementById("saveSettings"),
     resetToday: document.getElementById("resetToday"),
+    privacyAppLockToggle: document.getElementById("privacyAppLockToggle"),
+    appLockSetBtn: document.getElementById("appLockSetBtn"),
+    privacyBlurToggle: document.getElementById("privacyBlurToggle"),
+    privacyAppLockToggle: document.getElementById("privacyAppLockToggle"),
+    privacyRedactToggle: document.getElementById("privacyRedactToggle"),
+    privacyEncryptedToggle: document.getElementById("privacyEncryptedToggle"),
+    privacyBlurOverlay: document.getElementById("privacyBlurOverlay"),
+    appLockOverlay: document.getElementById("appLockOverlay"),
+    appLockInput: document.getElementById("appLockInput"),
+    appLockSubmit: document.getElementById("appLockSubmit"),
+    appLockMessage: document.getElementById("appLockMessage"),
+    appLockSetBtn: document.getElementById("appLockSetBtn"),
+    todayNudgeToggle: document.getElementById("todayNudgeToggle"),
 
     rosterProteins: document.getElementById("roster-proteins"),
     rosterCarbs: document.getElementById("roster-carbs"),
     rosterFats: document.getElementById("roster-fats"),
     rosterMicros: document.getElementById("roster-micros"),
+    rosterSupplements: document.getElementById("roster-supplements"),
+    rosterSupplementsBlock: document.getElementById("roster-supplements-block"),
 
     // sheet
     sheet: document.getElementById("sheet"),
@@ -115,30 +151,16 @@ export function getElements(){
     chipsCarbs: document.getElementById("chipsCarbs"),
     chipsFats: document.getElementById("chipsFats"),
     chipsMicros: document.getElementById("chipsMicros"),
-    searchProteins: document.getElementById("searchProteins"),
-    searchCarbs: document.getElementById("searchCarbs"),
-    searchFats: document.getElementById("searchFats"),
-    searchMicros: document.getElementById("searchMicros"),
-
     addProtein: document.getElementById("addProtein"),
     addCarb: document.getElementById("addCarb"),
     addFat: document.getElementById("addFat"),
     addMicro: document.getElementById("addMicro"),
-
-    searchProteins: document.getElementById("searchProteins"),
-    searchCarbs: document.getElementById("searchCarbs"),
-    searchFats: document.getElementById("searchFats"),
-    searchMicros: document.getElementById("searchMicros"),
 
     segCollision: document.getElementById("segCollision"),
     segHighFat: document.getElementById("segHighFat"),
     segSeedOil: document.getElementById("segSeedOil"),
     segStatus: document.getElementById("segStatus"),
     segNotes: document.getElementById("segNotes"),
-    flagHelp: document.getElementById("flagHelp"),
-
-    undoToast: document.getElementById("undoToast"),
-    undoMsg: document.getElementById("undoMsg"),
-    undoBtn: document.getElementById("undoBtn")
+    flagHelp: document.getElementById("flagHelp")
   };
 }

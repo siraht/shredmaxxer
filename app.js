@@ -9,8 +9,8 @@ import { getElements } from "./ui/elements.js";
 import { createLegacyUI } from "./ui/legacy.js";
 import { normalizeTri } from "./domain/heuristics.js";
 import { ensureDayMeta, ensureSegmentMeta, touchDay, touchSegment } from "./domain/revisions.js";
-import { activeDayKey, addDaysLocal, dateToKey } from "./domain/time.js";
-import { createInsightsState, mergeInsightsState } from "./domain/insights.js";
+import { activeDayKey, addDaysLocal, dateToKey, computeSunTimes } from "./domain/time.js";
+import { createInsightsState, mergeInsightsState, dismissInsight } from "./domain/insights.js";
 import { mergeDay, mergeRosters } from "./storage/merge.js";
 import { savePreImportSnapshot, saveSnapshotWithRetention } from "./storage/snapshots.js";
 import { createDefaultRosters, findDefaultRosterTemplate } from "./domain/roster_defaults.js";
@@ -20,6 +20,7 @@ import { migrateV3ToV4 } from "./storage/migrate.js";
 import { APP_VERSION, buildMeta } from "./storage/meta.js";
 import { validateImportPayload as validateV4Import } from "./storage/validate.js";
 import { serializeExport } from "./storage/export.js";
+import { encryptExport } from "./storage/encrypted_export.js";
 import { storageAdapter } from "./storage/adapter.js";
 
 const STORAGE_KEY = "shredmaxx_tracker_v4";
@@ -75,7 +76,8 @@ const LEGACY_ROSTERS = {
     "Cilantro",
     "Arugula (bitter greens)",
     "Seaweed"
-  ]
+  ],
+  supplements: []
 };
 
 const DEFAULT_SETTINGS = {
@@ -96,12 +98,16 @@ const DEFAULT_SETTINGS = {
   sunMode: "manual", // "manual" | "auto"
   phase: "", // "" | "strict" | "maintenance" | "advanced"
   weekStart: 0, // 0=Sunday
+  nudgesEnabled: false,
+  supplementsMode: "none", // "" | "none" | "essential" | "advanced"
   lastKnownLat: undefined,
   lastKnownLon: undefined,
   privacy: {
     appLock: false,
+    appLockHash: "",
     redactHome: false,
-    exportEncryptedByDefault: false
+    exportEncryptedByDefault: false,
+    blurOnBackground: false
   }
 };
 
@@ -116,6 +122,14 @@ function deepClone(x){
   return (typeof structuredClone === "function")
     ? structuredClone(x)
     : JSON.parse(JSON.stringify(x));
+}
+
+function mergeSettings(base, next){
+  const merged = { ...(base || {}), ...(next || {}) };
+  if(base?.privacy || next?.privacy){
+    merged.privacy = { ...(base?.privacy || {}), ...(next?.privacy || {}) };
+  }
+  return merged;
 }
 
 function yyyyMmDd(d){
@@ -168,6 +182,7 @@ function createDefaultDay(){
       dinner: { status: "unlogged", proteins: [], carbs: [], fats: [], micros: [], collision: "auto", highFatMeal: "auto", seedOil: "", notes: "", tsFirst: "", tsLast: "", rev: 0 },
       late: { status: "unlogged", proteins: [], carbs: [], fats: [], micros: [], collision: "auto", highFatMeal: "auto", seedOil: "", notes: "", tsFirst: "", tsLast: "", rev: 0 }
     },
+    supplements: { mode: "none", items: [], notes: "", tsLast: "" },
     movedBeforeLunch: false,
     trained: false,
     highFatDay: false,
@@ -207,12 +222,13 @@ function migrateFromLegacy(old){
   };
 
   if(old && typeof old === "object"){
-    if(old.settings) s.settings = { ...s.settings, ...old.settings };
+    if(old.settings) s.settings = mergeSettings(s.settings, old.settings);
     if(old.rosters) s.rosters = {
       proteins: Array.isArray(old.rosters.proteins) ? old.rosters.proteins : s.rosters.proteins,
       carbs: Array.isArray(old.rosters.carbs) ? old.rosters.carbs : s.rosters.carbs,
       fats: Array.isArray(old.rosters.fats) ? old.rosters.fats : s.rosters.fats,
-      micros: Array.isArray(old.rosters.micros) ? old.rosters.micros : s.rosters.micros
+      micros: Array.isArray(old.rosters.micros) ? old.rosters.micros : s.rosters.micros,
+      supplements: Array.isArray(old.rosters.supplements) ? old.rosters.supplements : s.rosters.supplements
     };
 
     if(old.logs && typeof old.logs === "object"){
@@ -319,7 +335,7 @@ async function loadState(){
 function hydrateState(obj){
   const s = createDefaultState();
   if(obj.meta) s.meta = { ...s.meta, ...obj.meta };
-  if(obj.settings) s.settings = { ...s.settings, ...obj.settings };
+  if(obj.settings) s.settings = mergeSettings(s.settings, obj.settings);
   if(obj.insights) s.insights = mergeInsightsState(s.insights, obj.insights);
   if(obj.rosters){
     for(const k of ["proteins", "carbs", "fats", "micros"]){
@@ -373,6 +389,19 @@ async function persistSettings() {
     await storageAdapter.saveSettings(state.settings);
   } catch(e) {
     console.error("Failed to persist settings:", e);
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  }
+}
+
+async function persistInsights() {
+  try {
+    if(storageAdapter.saveInsights){
+      await storageAdapter.saveInsights(state.insights);
+    }else{
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    }
+  } catch(e) {
+    console.error("Failed to persist insights:", e);
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
   }
 }
@@ -475,6 +504,18 @@ function getDay(dateKey){
     syncSegmentStatus(out.segments[segId], segId);
   }
 
+  const defaultSuppMode = state?.settings?.supplementsMode || "none";
+  const supp = (out.supplements && typeof out.supplements === "object")
+    ? { ...out.supplements }
+    : { mode: defaultSuppMode, items: [], notes: "", tsLast: "" };
+  if(typeof supp.mode !== "string" || !supp.mode){
+    supp.mode = defaultSuppMode;
+  }
+  if(!Array.isArray(supp.items)) supp.items = [];
+  if(typeof supp.notes !== "string") supp.notes = supp.notes ? String(supp.notes) : "";
+  if(typeof supp.tsLast !== "string") supp.tsLast = supp.tsLast ? String(supp.tsLast) : "";
+  out.supplements = supp;
+
   ensureDayMeta(out);
   return out;
 }
@@ -519,6 +560,9 @@ function copyYesterday(dateKey){
     const incoming = sourceSegments[segId] || {};
     const next = { ...template, ...deepClone(incoming) };
     if(segId !== "ftn") delete next.ftnMode;
+    next.tsFirst = "";
+    next.tsLast = "";
+    next.rev = 0;
     syncSegmentStatus(next, segId);
     touchSegment(next, nowIso);
     day.segments[segId] = next;
@@ -652,7 +696,7 @@ function copySegment(dateKey, targetSegId, sourceSeg){
   }
   next.tsFirst = "";
   next.tsLast = "";
-  next.rev = Number.isFinite(target.rev) ? target.rev : 0;
+  next.rev = 0;
 
   day.segments[targetSegId] = next;
   syncSegmentStatus(next, targetSegId);
@@ -668,6 +712,43 @@ function setDayField(dateKey, field, value){
   if(day[field] === value) return;
   day[field] = value;
   touchDay(day);
+  setDay(dateKey, day);
+}
+
+function toggleSupplementItem(dateKey, itemId){
+  if(!itemId) return;
+  const day = getDay(dateKey);
+  const defaultMode = state?.settings?.supplementsMode || "none";
+  const supp = day.supplements && typeof day.supplements === "object"
+    ? { ...day.supplements }
+    : { mode: defaultMode, items: [], notes: "", tsLast: "" };
+  if(!Array.isArray(supp.items)) supp.items = [];
+  const idx = supp.items.indexOf(itemId);
+  if(idx >= 0){
+    supp.items.splice(idx, 1);
+  }else{
+    supp.items.push(itemId);
+  }
+  supp.mode = supp.mode || defaultMode;
+  supp.tsLast = new Date().toISOString();
+  day.supplements = supp;
+  touchDay(day, supp.tsLast);
+  setDay(dateKey, day);
+}
+
+function setSupplementsNotes(dateKey, notes){
+  const day = getDay(dateKey);
+  const defaultMode = state?.settings?.supplementsMode || "none";
+  const supp = day.supplements && typeof day.supplements === "object"
+    ? { ...day.supplements }
+    : { mode: defaultMode, items: [], notes: "", tsLast: "" };
+  const nextNotes = (typeof notes === "string") ? notes : String(notes || "");
+  if(supp.notes === nextNotes) return;
+  supp.mode = supp.mode || defaultMode;
+  supp.notes = nextNotes;
+  supp.tsLast = new Date().toISOString();
+  day.supplements = supp;
+  touchDay(day, supp.tsLast);
   setDay(dateKey, day);
 }
 
@@ -752,12 +833,51 @@ function toggleRosterArchivedAction(category, itemId){
   return updateRosterItem(category, itemId, (item) => toggleRosterArchived(item));
 }
 
-function exportState(){
-  const json = serializeExport(state, { appVersion: APP_VERSION, now: new Date() });
+async function exportState(mode){
+  if(mode && typeof mode === "object" && mode.type){
+    mode = undefined;
+  }
+  const now = new Date();
+  const dateLabel = yyyyMmDd(now);
+  const useEncrypted = (mode === "encrypted")
+    ? true
+    : (mode === "plain")
+      ? false
+      : !!state.settings?.privacy?.exportEncryptedByDefault;
+
+  if(useEncrypted){
+    const passphrase = prompt("Enter passphrase for encrypted export:");
+    if(!passphrase){
+      alert("Encrypted export canceled (no passphrase).");
+      return;
+    }
+    const confirmPass = prompt("Confirm passphrase:");
+    if(confirmPass !== passphrase){
+      alert("Passphrases did not match. Export canceled.");
+      return;
+    }
+    try{
+      const payload = await encryptExport(state, passphrase, { exportOptions: { appVersion: APP_VERSION, now } });
+      const json = JSON.stringify(payload, null, 2);
+      const blob = new Blob([json], { type: "application/json" });
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = `shredmaxx_solar_log_${dateLabel}.encrypted.json`;
+      a.click();
+      URL.revokeObjectURL(a.href);
+      return;
+    }catch(e){
+      console.error("Encrypted export failed:", e);
+      alert("Encrypted export failed. Check WebCrypto support.");
+      return;
+    }
+  }
+
+  const json = serializeExport(state, { appVersion: APP_VERSION, now });
   const blob = new Blob([json], { type: "application/json" });
   const a = document.createElement("a");
   a.href = URL.createObjectURL(blob);
-  a.download = `shredmaxx_solar_log_${yyyyMmDd(new Date())}.json`;
+  a.download = `shredmaxx_solar_log_${dateLabel}.json`;
   a.click();
   URL.revokeObjectURL(a.href);
 }
@@ -772,8 +892,14 @@ async function importState(file){
 }
 
 function updateSettings(nextSettings){
-  state.settings = { ...state.settings, ...nextSettings };
+  state.settings = mergeSettings(state.settings, nextSettings);
   persistSettings().catch(e => console.error("Persist settings failed:", e));
+}
+
+function dismissInsightAction(insight){
+  if(!insight) return;
+  state.insights = dismissInsight(state.insights, insight);
+  persistInsights().catch(e => console.error("Persist insights failed:", e));
 }
 
 function toggleFocusMode(){
@@ -850,6 +976,7 @@ async function applyImportPayload(payload, mode){
       meta: payload.meta,
       settings: payload.settings,
       rosters: payload.rosters,
+      insights: payload.insights || createInsightsState(),
       logs: payload.logs
     };
   }else if(payload && payload.version === 3){
@@ -861,7 +988,11 @@ async function applyImportPayload(payload, mode){
   }else{
     next = migrateFromLegacy(payload);
   }
+  if(next){
+    next.settings = mergeSettings(DEFAULT_SETTINGS, next.settings || {});
+  }
   if(mode === "replace"){
+    next.insights = mergeInsightsState(createInsightsState(), next.insights);
     state = next;
     await persistAll();
     return { ok: true, mode: "replace", version: validation.version, legacy: validation.legacy };
@@ -870,7 +1001,8 @@ async function applyImportPayload(payload, mode){
   const merged = {
     ...state,
     rosters: mergeRosters(state.rosters, next.rosters, { dedupeByLabel: true }),
-    logs: mergeLogs(state.logs, next.logs)
+    logs: mergeLogs(state.logs, next.logs),
+    insights: mergeInsightsState(state.insights, next.insights)
   };
 
   state = merged;
@@ -895,6 +1027,7 @@ const ui = createLegacyUI({
     escapeHtml,
     clamp,
     nowMinutes,
+    computeSunTimes,
     yyyyMmDd,
     addDays,
     dateFromKey,
@@ -912,6 +1045,8 @@ const ui = createLegacyUI({
     canCopyYesterday,
     copyYesterday,
     setDayField,
+    toggleSupplementItem,
+    setSupplementsNotes,
     toggleBoolField,
     addRosterItem,
     removeRosterItem,
@@ -931,6 +1066,7 @@ const ui = createLegacyUI({
     replaceState,
     updateSettings,
     toggleFocusMode,
+    dismissInsight: dismissInsightAction,
     resetDay
   }
 });
