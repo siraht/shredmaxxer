@@ -1,6 +1,6 @@
 // @ts-check
 
-import { effectiveSegmentFlags } from "../domain/heuristics.js";
+import { effectiveSegmentFlags, normalizeTri } from "../domain/heuristics.js";
 
 /**
  * @param {any} seg
@@ -44,7 +44,8 @@ export function segmentHasContent(seg, segId){
  */
 export function dayHasDailyContent(day){
   if(!day) return false;
-  return !!(day.movedBeforeLunch || day.trained || day.highFatDay || day.energy || day.mood || day.cravings || day.notes);
+  const highFatYes = normalizeTri(day.highFatDay) === "yes";
+  return !!(day.movedBeforeLunch || day.trained || highFatYes || day.energy || day.mood || day.cravings || day.notes);
 }
 
 /**
@@ -124,6 +125,50 @@ export function countIssues(day, rosters){
     if(effective.highFatMeal.value) highFat = true;
   }
   return { collision, seedOil, highFat };
+}
+
+/**
+ * @param {any} rosters
+ * @param {Record<string, any>} logs
+ * @returns {Map<string, string>}
+ */
+export function collectMissingRosterItems(rosters, logs){
+  const rosterIds = new Set();
+  const cats = ["proteins", "carbs", "fats", "micros", "supplements"];
+  for(const cat of cats){
+    const list = Array.isArray(rosters?.[cat]) ? rosters[cat] : [];
+    for(const item of list){
+      if(!item) continue;
+      if(typeof item === "string"){
+        rosterIds.add(String(item));
+        continue;
+      }
+      if(item.id) rosterIds.add(String(item.id));
+    }
+  }
+
+  const missing = new Map();
+  const dayList = logs && typeof logs === "object" ? Object.values(logs) : [];
+  for(const day of dayList){
+    const segments = day?.segments || {};
+    for(const seg of Object.values(segments)){
+      if(!seg || typeof seg !== "object") continue;
+      for(const cat of ["proteins", "carbs", "fats", "micros"]){
+        const items = Array.isArray(seg[cat]) ? seg[cat] : [];
+        for(const id of items){
+          const key = String(id);
+          if(!rosterIds.has(key) && !missing.has(key)) missing.set(key, cat);
+        }
+      }
+    }
+    const suppItems = Array.isArray(day?.supplements?.items) ? day.supplements.items : [];
+    for(const id of suppItems){
+      const key = String(id);
+      if(!rosterIds.has(key) && !missing.has(key)) missing.set(key, "supplements");
+    }
+  }
+
+  return missing;
 }
 
 /**

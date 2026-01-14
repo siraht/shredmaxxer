@@ -2,6 +2,7 @@
 
 import {
   countIssues,
+  collectMissingRosterItems,
   dayHasDailyContent,
   formatLatLon,
   formatSnapshotTime,
@@ -75,6 +76,29 @@ function assert(condition, label){
   day.segments.lunch.seedOil = "yes";
   const issues = countIssues(day, rosters);
   assert(issues.collision && issues.highFat && issues.seedOil, "countIssues detects issue flags");
+}
+
+{
+  const rosters = {
+    proteins: [{ id: "p1", label: "Beef" }],
+    carbs: [],
+    fats: [],
+    micros: [],
+    supplements: [{ id: "s1", label: "Magnesium" }]
+  };
+  const logs = {
+    "2026-01-02": {
+      segments: {
+        lunch: { proteins: ["p1", "p2"], carbs: ["c1"], fats: [], micros: [] }
+      },
+      supplements: { items: ["s1", "s2"] }
+    }
+  };
+  const missing = collectMissingRosterItems(rosters, logs);
+  assert(missing.size === 3, "collectMissingRosterItems finds all missing ids");
+  assert(missing.get("p2") === "proteins", "missing protein id mapped to category");
+  assert(missing.get("c1") === "carbs", "missing carb id mapped to category");
+  assert(missing.get("s2") === "supplements", "missing supplement id mapped to category");
 }
 
 {

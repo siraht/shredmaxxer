@@ -1,6 +1,6 @@
 /* App-shell cache with explicit versioning */
 const CACHE_PREFIX = "shredmaxx-app-shell";
-const CACHE_VERSION = "v4-0.9";
+const CACHE_VERSION = "v4-0.11";
 const CACHE_NAME = `${CACHE_PREFIX}-${CACHE_VERSION}`;
 const RUNTIME_CACHE = "shredmaxx-runtime-v1";
 
@@ -13,12 +13,38 @@ const ASSETS = [
   "./app/action_logic.js",
   "./app/helpers.js",
   "./app/import_logic.js",
+  "./app/router.js",
+  "./app/render_scheduler.js",
+  "./app/shell.js",
   "./app/store.js",
   "./app/reducer.js",
   "./ui/elements.js",
+  "./ui/router.js",
+  "./ui/shell.js",
   "./ui/legacy.js",
   "./ui/legacy_helpers.js",
+  "./ui/icons.svg",
+  "./ui/components/chip_grid.js",
+  "./ui/components/roster_list.js",
+  "./ui/components/snapshot_list.js",
+  "./ui/components/audit_log.js",
+  "./ui/components/scales.js",
+  "./ui/components/rituals.js",
+  "./ui/components/supplements.js",
+  "./ui/components/timeline.js",
+  "./ui/vm/index.js",
+  "./ui/vm/memo.js",
+  "./ui/vm/today.js",
+  "./ui/vm/history.js",
+  "./ui/screens/review.js",
+  "./ui/screens/history.js",
+  "./ui/screens/settings.js",
+  "./ui/screens/today.js",
+  "./ui/screens/segment_editor.js",
+  "./ui/screens/segment_editor_wiring.js",
   "./domain/schema.js",
+  "./domain/hlc.js",
+  "./domain/hlc_clock.js",
   "./domain/time.js",
   "./domain/selectors.js",
   "./domain/roster.js",
@@ -44,11 +70,19 @@ const ASSETS = [
   "./storage/csv_export.js",
   "./storage/encrypted_export.js",
   "./storage/import.js",
+  "./storage/indexes.js",
   "./storage/merge.js",
+  "./storage/outbox.js",
+  "./storage/remote_client.js",
+  "./storage/sync_credentials.js",
+  "./storage/sync_crypto.js",
+  "./storage/sync_engine.js",
+  "./storage/sync_leader.js",
   "./storage/validate.js",
   "./storage/snapshots.js",
   "./storage/migrate.js",
   "./assets/fonts/SpaceGrotesk.woff2",
+  "./assets/fonts/JetBrainsMono.woff2",
   "./assets/fonts/Fraunces.woff2",
   "./manifest.webmanifest",
   "./icons/icon-192.png",
@@ -81,7 +115,8 @@ self.addEventListener("activate", (event) => {
 self.addEventListener("fetch", (event) => {
   if(event.request.method !== "GET") return;
 
-  const url = event.request.url;
+  const url = new URL(event.request.url);
+  if(url.pathname.startsWith("/api/")) return;
   if(event.request.mode === "navigate"){
     event.respondWith(
       fetch(event.request).catch(() => caches.match("./index.html"))
@@ -89,7 +124,7 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  if(ASSET_SET.has(url)){
+  if(ASSET_SET.has(url.href)){
     event.respondWith(
       caches.match(event.request).then((cached) => cached || fetch(event.request))
     );

@@ -8,43 +8,43 @@
   <link rel="manifest" href="manifest.webmanifest" />
   <link rel="stylesheet" href="style.css" />
   <link rel="preload" href="assets/fonts/SpaceGrotesk.woff2" as="font" type="font/woff2" crossorigin />
-  <link rel="preload" href="assets/fonts/Fraunces.woff2" as="font" type="font/woff2" crossorigin />
+  <link rel="preload" href="assets/fonts/JetBrainsMono.woff2" as="font" type="font/woff2" crossorigin />
 </head>
 <body>
-  <div class="sky-noise" aria-hidden="true"></div>
-  <div class="privacy-blur hidden" id="privacyBlurOverlay" aria-hidden="true"></div>
-  <div class="app-lock hidden" id="appLockOverlay" role="dialog" aria-modal="true" aria-hidden="true">
-    <div class="app-lock-card">
-      <div class="app-lock-title">App locked</div>
-      <div class="app-lock-sub">Enter your passcode to continue.</div>
-      <input class="field-input" id="appLockInput" type="password" inputmode="numeric" autocomplete="current-password" placeholder="Passcode" />
-      <button class="btn" id="appLockSubmit" type="button">Unlock</button>
-      <div class="tiny muted" id="appLockMessage"></div>
-    </div>
-  </div>
-  <header class="topbar">
-    <div class="brand">
-      <div class="brand-mark" aria-hidden="true">
-        <span class="mark-sun">☉</span>
-        <span class="mark-ring"></span>
-      </div>
-      <div class="brand-copy">
-        <div class="brand-title">Shredmaxx</div>
-        <div class="brand-sub" id="subtitle">Solar log • local-first</div>
+  <div id="app" class="app-shell" data-route="today">
+    <div class="sky-noise" aria-hidden="true"></div>
+    <div class="privacy-blur hidden" id="privacyBlurOverlay" aria-hidden="true"></div>
+    <div class="app-lock hidden" id="appLockOverlay" role="dialog" aria-modal="true" aria-hidden="true">
+      <div class="app-lock-card">
+        <div class="app-lock-title">App locked</div>
+        <div class="app-lock-sub">Enter your passcode to continue.</div>
+        <input class="field-input" id="appLockInput" type="password" inputmode="numeric" autocomplete="current-password" placeholder="Passcode" />
+        <button class="btn" id="appLockSubmit" type="button">Unlock</button>
+        <div class="tiny muted" id="appLockMessage"></div>
       </div>
     </div>
+    <div class="scrim hidden" id="scrim" data-region="scrim" aria-hidden="true"></div>
+    <header class="topbar" data-region="header">
+      <div class="brand">
+        <div class="brand-left">
+          <div class="brand-mark" aria-hidden="true">
+            <span class="mark-sun">☉</span>
+            <span class="mark-ring"></span>
+          </div>
+          <div class="brand-copy">
+            <div class="brand-title">Shredmaxx</div>
+            <div class="brand-sub" id="subtitle">Solar log • local-first</div>
+          </div>
+        </div>
+        <div class="brand-status" id="headerStatus" aria-live="polite">
+          <span class="pill pill--status" id="syncStatus">Offline</span>
+        </div>
+      </div>
+    </header>
 
-    <nav class="tabs" aria-label="Primary">
-      <button class="tab tab-active" id="tabToday" type="button">Today</button>
-      <button class="tab" id="tabHistory" type="button">History</button>
-      <button class="tab" id="tabReview" type="button">Review</button>
-      <button class="tab" id="tabSettings" type="button">Settings</button>
-    </nav>
-  </header>
-
-  <main class="wrap">
+    <main class="wrap" data-region="main">
     <!-- TODAY -->
-    <section class="view" id="viewToday">
+    <section class="view" id="viewToday" data-view="today">
       <div class="panel day-panel">
         <div class="day-head">
           <div class="date-nav">
@@ -178,7 +178,7 @@
     </section>
 
     <!-- HISTORY -->
-    <section class="view hidden" id="viewHistory">
+    <section class="view hidden" id="viewHistory" data-view="history">
       <div class="panel">
         <div class="section-title">History</div>
         <div class="history-list" id="historyList"></div>
@@ -215,6 +215,14 @@
             <span class="diagnostic-value" id="diagPersistStatus">—</span>
           </div>
           <div class="diagnostic-row">
+            <span class="diagnostic-label">Safe mode:</span>
+            <span class="diagnostic-value" id="diagSafeMode">—</span>
+          </div>
+          <div class="diagnostic-row">
+            <span class="diagnostic-label">DST clamp:</span>
+            <span class="diagnostic-value" id="diagDstClamp">—</span>
+          </div>
+          <div class="diagnostic-row">
             <span class="diagnostic-label">Schema version:</span>
             <span class="diagnostic-value" id="diagSchemaVersion">—</span>
           </div>
@@ -230,16 +238,38 @@
             <span class="diagnostic-label">Snapshots:</span>
             <span class="diagnostic-value" id="diagSnapshotCount">—</span>
           </div>
+          <div class="diagnostic-row">
+            <span class="diagnostic-label">Missing roster IDs:</span>
+            <span class="diagnostic-value" id="diagMissingItems">—</span>
+          </div>
         </div>
         <div class="row gap mt">
           <button class="btn ghost" id="snapshotCreate" type="button">Create snapshot now</button>
         </div>
         <div class="snapshot-list" id="snapshotList"></div>
+        <div class="section-title mt">Audit log</div>
+        <div class="row gap">
+          <select class="field-input" id="auditFilter">
+            <option value="all">All events</option>
+            <option value="info">Info</option>
+            <option value="warn">Warnings</option>
+            <option value="error">Errors</option>
+          </select>
+        </div>
+        <div class="snapshot-list" id="auditLogList"></div>
+      </div>
+    </section>
+
+    <!-- DAY DETAIL -->
+    <section class="view hidden" id="viewDay" data-view="day">
+      <div class="panel">
+        <div class="section-title">Day detail</div>
+        <div class="tiny muted">Placeholder for vNext day detail route.</div>
       </div>
     </section>
 
     <!-- REVIEW -->
-    <section class="view hidden" id="viewReview">
+    <section class="view hidden" id="viewReview" data-view="review">
       <div class="panel">
         <div class="section-title">Weekly review</div>
         <div class="tiny muted" id="reviewRange">—</div>
@@ -262,7 +292,7 @@
     </section>
 
     <!-- SETTINGS -->
-    <section class="view hidden" id="viewSettings">
+    <section class="view hidden" id="viewSettings" data-view="settings">
       <div class="panel">
         <div class="section-title">Time model</div>
 
@@ -371,6 +401,37 @@
       </div>
 
       <div class="panel">
+        <div class="section-title">Sync</div>
+        <div class="tiny muted">Hosted sync keeps your devices aligned. Local cache stays instant.</div>
+
+        <div class="grid2 mt">
+          <div class="field">
+            <label class="field-label" for="syncLinkInput">Sync link</label>
+            <input class="field-input" id="syncLinkInput" type="text" placeholder="Paste sync link here" />
+            <div class="field-help" id="syncLinkStatus">No sync link configured.</div>
+            <div class="row gap mt">
+              <button class="btn" id="syncLinkApply" type="button">Use link</button>
+              <button class="btn ghost" id="syncLinkCopy" type="button">Copy link</button>
+            </div>
+          </div>
+
+          <div class="field">
+            <label class="field-label" for="syncE2eeToggle">Encryption</label>
+            <select class="field-input" id="syncE2eeToggle">
+              <option value="none">None</option>
+              <option value="e2ee">E2EE (passphrase)</option>
+            </select>
+            <div class="field-help">E2EE stores ciphertext only; passphrase never saved.</div>
+          </div>
+        </div>
+
+        <div class="row gap mt">
+          <button class="btn ghost" id="syncNowBtn" type="button">Sync now</button>
+          <button class="btn ghost" id="syncResetSpace" type="button">Reset sync space</button>
+        </div>
+      </div>
+
+      <div class="panel">
         <div class="section-title">Rosters</div>
         <div class="tiny muted">Edit your default options. You can also add items inside a segment.</div>
 
@@ -446,13 +507,24 @@
         <div class="tiny muted">App lock gates access on launch; blur affects app switcher snapshots; redaction hides Today labels/notes; encrypted export asks for a passphrase.</div>
       </div>
     </section>
-  </main>
+    </main>
 
-  <!-- SEGMENT SHEET -->
-  <div class="sheet hidden" id="sheet" aria-hidden="true">
-    <div class="sheet-backdrop" id="sheetBackdrop" aria-hidden="true"></div>
+    <nav class="tabs bottom-nav" data-region="nav" aria-label="Primary">
+      <button class="tab tab-active" id="tabToday" type="button" data-action="route" data-route="today">HOME</button>
+      <button class="tab" id="tabHistory" type="button" data-action="route" data-route="history">LOGS</button>
+      <button class="tab" id="tabReview" type="button" data-action="route" data-route="review">STATS</button>
+      <button class="tab" id="tabSettings" type="button" data-action="route" data-route="settings">
+        CFG
+        <span class="tab-badge" id="outboxBadge" hidden>0</span>
+      </button>
+    </nav>
 
-    <div class="sheet-panel" role="dialog" aria-modal="true" aria-labelledby="sheetTitle">
+    <div id="modalRoot" data-region="modals">
+      <!-- SEGMENT SHEET -->
+      <div class="sheet hidden" id="sheet" aria-hidden="true">
+        <div class="sheet-backdrop" id="sheetBackdrop" aria-hidden="true"></div>
+
+        <div class="sheet-panel" role="dialog" aria-modal="true" aria-labelledby="sheetTitle">
       <div class="sheet-handle" aria-hidden="true"></div>
       <div class="sheet-head">
         <div>
@@ -559,15 +631,19 @@
       </div>
     </div>
   </div>
+    </div>
 
-  <div class="update-toast" id="updateToast" hidden role="status" aria-live="polite">
-    <span>Update available</span>
-    <button class="btn small" id="updateReload" type="button">Update</button>
-  </div>
+    <div id="toastRoot" data-region="toasts">
+      <div class="update-toast" id="updateToast" hidden role="status" aria-live="polite">
+        <span>Update available</span>
+        <button class="btn small" id="updateReload" type="button">Update</button>
+      </div>
 
-  <div class="update-toast" id="undoToast" hidden role="status" aria-live="polite">
-    <span id="undoLabel">Change saved</span>
-    <button class="btn small" id="undoAction" type="button">Undo</button>
+      <div class="update-toast" id="undoToast" hidden role="status" aria-live="polite">
+        <span id="undoLabel">Change saved</span>
+        <button class="btn small" id="undoAction" type="button">Undo</button>
+      </div>
+    </div>
   </div>
 
   <script type="module" src="app/boot.js"></script>

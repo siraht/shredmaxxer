@@ -2,16 +2,31 @@
 
 import { effectiveSegmentFlags, normalizeTri } from "../domain/heuristics.js";
 import { computeSegmentWindows } from "../domain/time.js";
-import { searchRosterItems } from "../domain/search.js";
-import { computeRotationPicks } from "../domain/rotation.js";
-import { computeInsights } from "../domain/insights.js";
-import { computeWeeklySummary } from "../domain/weekly.js";
+import { createRenderScheduler } from "../app/render_scheduler.js";
+import { renderHistoryScreen } from "./screens/history.js";
+import { renderReviewScreen } from "./screens/review.js";
+import { renderSettingsScreen } from "./screens/settings.js";
+import { renderTodayScreen } from "./screens/today.js";
+import { createSegmentEditor } from "./screens/segment_editor.js";
+import { wireSegmentEditor } from "./screens/segment_editor_wiring.js";
+import { renderChipSet } from "./components/chip_grid.js";
+import { renderRosterList as renderRosterListComponent } from "./components/roster_list.js";
+import { renderSnapshotList as renderSnapshotListComponent } from "./components/snapshot_list.js";
+import { renderAuditLog as renderAuditLogComponent } from "./components/audit_log.js";
+import { renderScales as renderScalesComponent } from "./components/scales.js";
+import { renderRituals as renderRitualsComponent } from "./components/rituals.js";
+import { renderSupplements as renderSupplementsComponent } from "./components/supplements.js";
 import {
-  countIssues,
+  renderTimeline as renderTimelineComponent,
+  renderSolarArc as renderSolarArcComponent,
+  renderNowMarker as renderNowMarkerComponent,
+  applyFutureFog as applyFutureFogComponent
+} from "./components/timeline.js";
+import {
   dayHasDailyContent,
+  collectMissingRosterItems,
   formatLatLon,
   formatSnapshotTime,
-  mergeDayDiversity,
   parseCommaList,
   parseCopySegments,
   segCounts,
@@ -27,6 +42,7 @@ export function createLegacyUI(ctx){
     escapeHtml,
     clamp,
     nowMinutes,
+    clampLocalTime,
     yyyyMmDd,
     addDays,
     dateFromKey,
@@ -42,18 +58,30 @@ export function createLegacyUI(ctx){
   const getCurrentSegmentId = ctx.getCurrentSegmentId;
   const setCurrentSegmentId = ctx.setCurrentSegmentId;
 
-  let segmentEls = {};
+  let activeTab = "today";
+  const dirtyViews = new Set();
+
+  const segmentElsRef = { current: {} };
   let notesDebounce = null;
   let segNotesTimer = null;
   let supplementsNotesDebounce = null;
   let pendingImport = null;
   let pendingImportName = "";
   let diagSnapshotSeq = 0;
+  let auditLogSeq = 0;
+  let auditLogCache = [];
+  let missingRosterItems = new Map();
   let rosterSearch = {
     proteins: "",
     carbs: "",
     fats: "",
     micros: ""
+  };
+  const searchInputs = {
+    proteins: els.searchProteins,
+    carbs: els.searchCarbs,
+    fats: els.searchFats,
+    micros: els.searchMicros
   };
   let undoState = null;
   let undoTimer = null;
@@ -63,6 +91,19 @@ export function createLegacyUI(ctx){
   const APP_LOCK_SALT_KEY = "shredmaxx_app_lock_salt";
   const appLockEncoder = (typeof TextEncoder !== "undefined") ? new TextEncoder() : null;
   let appLocked = false;
+
+  const segmentEditor = createSegmentEditor({
+    els,
+    getState,
+    getDay,
+    getSegmentDefs,
+    setCurrentSegmentId,
+    formatRange,
+    escapeHtml,
+    renderChipSet,
+    getRosterSearch: () => rosterSearch,
+    setRosterSearch: (next) => { rosterSearch = next; }
+  });
 
   function liftMinuteToTimeline(minute, start){
     return minute < start ? minute + 1440 : minute;
@@ -91,7 +132,18 @@ export function createLegacyUI(ctx){
     }, 5000);
   }
 
+  function isSafeModeActive(){
+    return !!getState().meta?.integrity?.safeMode;
+  }
+
+  function blockIfSafeMode(message){
+    if(!isSafeModeActive()) return false;
+    showUndoToast(message || "Safe Mode: edits disabled");
+    return true;
+  }
+
   function captureUndo(label, fn){
+    if(blockIfSafeMode()) return;
     const snapshot = cloneStateSnapshot();
     const result = fn();
     undoState = snapshot;
@@ -105,6 +157,8 @@ export function createLegacyUI(ctx){
 
   // --- View switching ---
   function setActiveTab(which){
+    activeTab = which;
+    dirtyViews.add(which);
     const map = {
       today: [els.tabToday, els.viewToday],
       history: [els.tabHistory, els.viewHistory],
@@ -142,76 +196,6 @@ export function createLegacyUI(ctx){
     return defs[defs.length - 1].id;
   }
 
-  // --- Timeline rendering ---
-  function setSkyByTime(minuteNow, sunriseMin, sunsetMin){
-    const state = getState();
-    const settings = state.settings;
-
-    // Basic phase model with one-hour shoulders around sunrise/sunset
-    const dawnStart = sunriseMin - 60;
-    const dawnEnd = sunriseMin + 60;
-    const duskStart = sunsetMin - 60;
-    const duskEnd = sunsetMin + 60;
-
-    let phase = "Night";
-    let skyA = "#050714", skyB = "#090b22", skyC = "#0d1238";
-    let accent = "var(--sun)";
-    let sub = "";
-
-    if(minuteNow >= dawnStart && minuteNow < dawnEnd){
-      phase = "Dawn";
-      skyA = "#0a0a25";
-      skyB = "#23104b";
-      skyC = "#401636";
-      accent = "var(--sunrise)";
-      sub = `Sunrise ${fmtTime(settings.sunrise)}`;
-    }else if(minuteNow >= dawnEnd && minuteNow < duskStart){
-      phase = "Day";
-      skyA = "#061026";
-      skyB = "#081a34";
-      skyC = "#0b1230";
-      accent = "var(--sun)";
-      sub = `Sunset ${fmtTime(settings.sunset)}`;
-    }else if(minuteNow >= duskStart && minuteNow < duskEnd){
-      phase = "Dusk";
-      skyA = "#150a1b";
-      skyB = "#2a0718";
-      skyC = "#0a0a25";
-      accent = "var(--sunset)";
-      sub = `Sunset ${fmtTime(settings.sunset)}`;
-    }else{
-      phase = "Night";
-      skyA = "#050714";
-      skyB = "#070a1b";
-      skyC = "#0b1030";
-      accent = "var(--cyan)";
-      sub = "Low light. Protect sleep.";
-    }
-
-    document.documentElement.style.setProperty("--skyA", skyA);
-    document.documentElement.style.setProperty("--skyB", skyB);
-    document.documentElement.style.setProperty("--skyC", skyC);
-
-    // phase copy
-    els.phaseLabel.textContent = phase;
-    els.phaseSub.textContent = sub;
-
-    // set focus dot color subtly
-    els.toggleFocus.querySelector(".focus-dot").style.background = accent;
-  }
-
-  function computeArcPath(x1, x2, yBase, yPeak){
-    const xm = (x1 + x2) / 2;
-    return `M ${x1.toFixed(2)} ${yBase.toFixed(2)} Q ${xm.toFixed(2)} ${yPeak.toFixed(2)} ${x2.toFixed(2)} ${yBase.toFixed(2)}`;
-  }
-
-  function quadPoint(x1, x2, yBase, yPeak, t){
-    // quadratic Bezier with control point in the middle; x becomes linear in t
-    const x = x1 * (1 - t) + x2 * t;
-    const y = (1 - t) * (1 - t) * yBase + 2 * (1 - t) * t * yPeak + t * t * yBase;
-    return { x, y };
-  }
-
   function formatRange(aMin, bMin){
     return `${minutesToTime(aMin)}–${minutesToTime(bMin)}`;
   }
@@ -222,6 +206,7 @@ export function createLegacyUI(ctx){
   }
 
   function updateSunTimesFromLocation(){
+    if(blockIfSafeMode()) return;
     if(!navigator || !navigator.geolocation){
       setSunAutoStatus("Geolocation not available in this browser.");
       showUndoToast("Geolocation unavailable");
@@ -584,7 +569,7 @@ export function createLegacyUI(ctx){
       if(parsed.includeDaily){
         actions.setDayField(targetKey, "movedBeforeLunch", !!sourceDay.movedBeforeLunch);
         actions.setDayField(targetKey, "trained", !!sourceDay.trained);
-        actions.setDayField(targetKey, "highFatDay", !!sourceDay.highFatDay);
+        actions.setDayField(targetKey, "highFatDay", normalizeTri(sourceDay.highFatDay));
         actions.setDayField(targetKey, "energy", sourceDay.energy || "");
         actions.setDayField(targetKey, "mood", sourceDay.mood || "");
         actions.setDayField(targetKey, "cravings", sourceDay.cravings || "");
@@ -598,139 +583,44 @@ export function createLegacyUI(ctx){
   function renderTimeline(dateKey, day){
     const state = getState();
     const defs = getSegmentDefs(state.settings);
-    const start = defs[0].start;
-    const end = defs[defs.length - 1].end;
-    const span = Math.max(1, end - start);
-
-    // clear
-    els.timelineTrack.innerHTML = "";
-    segmentEls = {};
-
-    // build segments
-    for(const d of defs){
-      const leftPct = ((d.start - start) / span) * 100;
-      const widthPct = ((d.end - d.start) / span) * 100;
-
-      const segEl = document.createElement("div");
-      segEl.className = "segment";
-      segEl.style.left = `${leftPct}%`;
-      segEl.style.width = `${widthPct}%`;
-      segEl.setAttribute("role", "button");
-      segEl.setAttribute("tabindex", "0");
-      segEl.dataset.segment = d.id;
-
-      // content
-      const title = document.createElement("div");
-      title.className = "segment-title";
-      title.textContent = d.label;
-
-      const time = document.createElement("div");
-      time.className = "segment-time";
-      time.textContent = formatRange(d.start, d.end);
-
-      const flags = document.createElement("div");
-      flags.className = "seg-flags";
-      flags.innerHTML = ""; // filled by updateSegmentVisual
-
-      const bubbles = document.createElement("div");
-      bubbles.className = "bubbles";
-      bubbles.innerHTML = `
-        <div class="bubble" data-b="P">P<span class="count" data-c="P"></span></div>
-        <div class="bubble" data-b="C">C<span class="count" data-c="C"></span></div>
-        <div class="bubble" data-b="F">F<span class="count" data-c="F"></span></div>
-        <div class="bubble" data-b="M">μ<span class="count" data-c="M"></span></div>
-      `;
-
-      segEl.appendChild(title);
-      segEl.appendChild(time);
-      segEl.appendChild(flags);
-      segEl.appendChild(bubbles);
-
-      let longPressTimer = null;
-      let longPressFired = false;
-
-      const clearLongPress = () => {
-        if(longPressTimer) clearTimeout(longPressTimer);
-        longPressTimer = null;
-      };
-
-      segEl.addEventListener("pointerdown", (e) => {
-        if(e.button !== undefined && e.button !== 0) return;
-        longPressFired = false;
-        clearLongPress();
-        longPressTimer = setTimeout(() => {
-          longPressFired = true;
-          repeatLastSegment(dateKey, d.id);
-        }, 520);
-      });
-
-      segEl.addEventListener("pointerup", clearLongPress);
-      segEl.addEventListener("pointerleave", clearLongPress);
-      segEl.addEventListener("pointercancel", clearLongPress);
-
-      segEl.addEventListener("click", (e) => {
-        if(longPressFired){
-          e.preventDefault();
-          longPressFired = false;
-          return;
-        }
-        openSegment(dateKey, d.id);
-      });
-      segEl.addEventListener("keydown", (e) => {
-        if(e.key === "Enter" || e.key === " "){
-          e.preventDefault();
-          openSegment(dateKey, d.id);
-        }
-      });
-
-      els.timelineTrack.appendChild(segEl);
-      segmentEls[d.id] = segEl;
-
-      updateSegmentVisual(dateKey, d.id);
-    }
-
-    // mark current segment if today
-    if(dateKey === getActiveDateKey()){
-      const now = nowMinutes();
-      const nowLifted = liftMinuteToTimeline(now, start);
-      const cur = whichSegment(nowLifted, defs);
-      for(const d of defs){
-        segmentEls[d.id]?.setAttribute("aria-current", d.id === cur ? "true" : "false");
-      }
-    }else{
-      for(const d of defs){
-        segmentEls[d.id]?.setAttribute("aria-current", "false");
-      }
-    }
-
-    // solar arc
-    renderSolarArc(dateKey);
-
-    // focus fog
-    applyFutureFog(dateKey);
+    renderTimelineComponent({
+      els,
+      dateKey,
+      state,
+      segmentDefs: defs,
+      formatRange,
+      updateSegmentVisual,
+      openSegment,
+      repeatLastSegment,
+      nowMinutes,
+      getActiveDateKey,
+      liftMinuteToTimeline,
+      whichSegment,
+      parseTimeToMinutes,
+      clampLocalTime,
+      dateFromKey,
+      minutesToTime,
+      fmtTime,
+      clamp,
+      segmentElsRef
+    });
   }
 
   function applyFutureFog(dateKey){
     const state = getState();
-    const mode = state.settings.focusMode || "nowfade";
-    els.focusLabel.textContent = (mode === "full") ? "Full day" : "Fade future";
-
-    if(mode !== "nowfade" || dateKey !== getActiveDateKey()){
-      els.futureFog.classList.remove("on");
-      return;
-    }
-
-    // Fade future only if now is within timeline
     const defs = getSegmentDefs(state.settings);
     const start = defs[0].start;
     const end = defs[defs.length - 1].end;
-    const now = nowMinutes();
-    const nowLifted = liftMinuteToTimeline(now, start);
-    if(nowLifted < start || nowLifted > end){
-      els.futureFog.classList.remove("on");
-      return;
-    }
-    els.futureFog.classList.add("on");
+    applyFutureFogComponent({
+      els,
+      dateKey,
+      state,
+      start,
+      end,
+      nowMinutes,
+      liftMinuteToTimeline,
+      getActiveDateKey
+    });
   }
 
   function renderSolarArc(dateKey){
@@ -738,97 +628,49 @@ export function createLegacyUI(ctx){
     const defs = getSegmentDefs(state.settings);
     const start = defs[0].start;
     const end = defs[defs.length - 1].end;
-    const span = Math.max(1, end - start);
-
-    const sunriseMin = parseTimeToMinutes(state.settings.sunrise);
-    const sunsetMin = parseTimeToMinutes(state.settings.sunset);
-    const sunriseLifted = liftMinuteToTimeline(sunriseMin, start);
-    const sunsetLifted = liftMinuteToTimeline(sunsetMin, start);
-    const sunriseClamped = clamp(sunriseLifted, start, end);
-    const sunsetClamped = clamp(sunsetLifted, start, end);
-
-    // map sunrise/sunset to x in viewBox coordinates
-    const W = 1000;
-    const yBase = 210;
-    const yPeak = 50;
-
-    const xSunrise = clamp(((sunriseClamped - start) / span), 0, 1) * W;
-    const xSunset = clamp(((sunsetClamped - start) / span), 0, 1) * W;
-
-    const path = computeArcPath(xSunrise, xSunset, yBase, yPeak);
-    els.sunArc.setAttribute("d", path);
-
-    // sun position
-    const isToday = (dateKey === getActiveDateKey());
-    const tMin = isToday ? nowMinutes() : (start + Math.floor(span * 0.45));
-    const tMinLocal = ((tMin % 1440) + 1440) % 1440;
-
-    // sky theme
-    setSkyByTime(tMinLocal, sunriseMin, sunsetMin);
-
-    let sunX = xSunrise;
-    let sunY = yBase;
-    let showSun = false;
-
-    if(sunsetMin > sunriseMin && tMinLocal >= sunriseMin && tMinLocal <= sunsetMin){
-      const t = clamp((tMinLocal - sunriseMin) / (sunsetMin - sunriseMin), 0, 1);
-      const p = quadPoint(xSunrise, xSunset, yBase, yPeak, t);
-      sunX = p.x;
-      sunY = p.y;
-      showSun = true;
-    }else{
-      // keep it low on the horizon at night
-      const before = (tMinLocal < sunriseMin);
-      sunX = before ? xSunrise : xSunset;
-      sunY = yBase;
-      showSun = false;
-    }
-
-    els.sunDot.setAttribute("cx", sunX.toFixed(2));
-    els.sunDot.setAttribute("cy", sunY.toFixed(2));
-    els.sunGlow.setAttribute("cx", sunX.toFixed(2));
-    els.sunGlow.setAttribute("cy", sunY.toFixed(2));
-    els.sunGlow.setAttribute("r", showSun ? "34" : "20");
-    els.sunGlow.style.opacity = showSun ? "1" : ".35";
-
-    els.sunTime.setAttribute("x", sunX.toFixed(2));
-    els.sunTime.setAttribute("y", (sunY - 18).toFixed(2));
-    els.sunTime.textContent = isToday ? minutesToTime(nowMinutes()) : " ";
-
-    // now marker on the timeline (HTML layer)
-    renderNowMarker(dateKey);
+    renderSolarArcComponent({
+      els,
+      dateKey,
+      state,
+      segmentDefs: defs,
+      start,
+      end,
+      nowMinutes,
+      liftMinuteToTimeline,
+      clamp,
+      parseTimeToMinutes,
+      clampLocalTime,
+      dateFromKey,
+      minutesToTime,
+      fmtTime,
+      getActiveDateKey,
+      whichSegment,
+      segmentElsRef
+    });
   }
 
   function renderNowMarker(dateKey){
-    if(dateKey !== getActiveDateKey()){
-      els.nowMarker.style.display = "none";
-      return;
-    }
-
-    const state = getState();
-    const defs = getSegmentDefs(state.settings);
+    const defs = getSegmentDefs(getState().settings);
     const start = defs[0].start;
     const end = defs[defs.length - 1].end;
-    const span = Math.max(1, end - start);
-
-    const now = nowMinutes();
-    const nowLifted = liftMinuteToTimeline(now, start);
-    const pct = clamp((nowLifted - start) / span, 0, 1) * 100;
-
-    els.nowMarker.style.display = "block";
-    els.nowMarker.style.left = `${pct}%`;
-
-    // update current segment highlight
-    const cur = whichSegment(nowLifted, defs);
-    for(const d of defs){
-      segmentEls[d.id]?.setAttribute("aria-current", d.id === cur ? "true" : "false");
-    }
+    renderNowMarkerComponent({
+      els,
+      dateKey,
+      segmentDefs: defs,
+      start,
+      end,
+      nowMinutes,
+      liftMinuteToTimeline,
+      getActiveDateKey,
+      whichSegment,
+      segmentElsRef
+    });
   }
 
   function updateSegmentVisual(dateKey, segId){
     const day = getDay(dateKey);
     const seg = day.segments[segId];
-    const el = segmentEls[segId];
+    const el = segmentElsRef.current[segId];
     if(!el || !seg) return;
 
     const status = seg.status || "unlogged";
@@ -896,168 +738,42 @@ export function createLegacyUI(ctx){
 
   // --- Sheet (segment editor) ---
   function openSegment(dateKey, segId){
-    setCurrentSegmentId(segId);
-
-    const state = getState();
-    const defs = getSegmentDefs(state.settings);
-    const def = defs.find(d => d.id === segId);
-    const day = getDay(dateKey);
-    const seg = day.segments[segId];
-
-    // title/sub
-    els.sheetTitle.textContent = def ? def.label : segId.toUpperCase();
-    const range = def ? formatRange(def.start, def.end) : "";
-    const tag = def ? def.sub : "";
-    const last = seg.tsLast ? ` • logged ${new Date(seg.tsLast).toLocaleTimeString([], {hour:"2-digit", minute:"2-digit"})}` : "";
-    els.sheetSub.textContent = `${tag} • ${range}${last}`;
-
-    // FTN mode row only for FTN segment
-    els.ftnModeRow.classList.toggle("hidden", segId !== "ftn");
-    if(segId === "ftn"){
-      setSegmentedActive(els.ftnModeSeg, seg.ftnMode || "");
-    }
-
-    // collision + high-fat + seed oil + status + notes
-    setSegmentedActive(els.segCollision, normalizeTri(seg.collision));
-    setSegmentedActive(els.segHighFat, normalizeTri(seg.highFatMeal));
-    setSegmentedActive(els.segSeedOil, seg.seedOil || "");
-    setSegmentedActive(els.segStatus, seg.status || "unlogged");
-    els.segNotes.value = seg.notes || "";
-
-    if(!rosterSearch){
-      rosterSearch = { proteins: "", carbs: "", fats: "", micros: "" };
-    }
-    els.searchProteins.value = rosterSearch.proteins || "";
-    els.searchCarbs.value = rosterSearch.carbs || "";
-    els.searchFats.value = rosterSearch.fats || "";
-    els.searchMicros.value = rosterSearch.micros || "";
-
-    // render chips
-    renderChipSet(els.chipsProteins, state.rosters.proteins, seg.proteins, rosterSearch.proteins);
-    renderChipSet(els.chipsCarbs, state.rosters.carbs, seg.carbs, rosterSearch.carbs);
-    renderChipSet(els.chipsFats, state.rosters.fats, seg.fats, rosterSearch.fats);
-    renderChipSet(els.chipsMicros, state.rosters.micros, seg.micros, rosterSearch.micros);
-
-    updateSheetHints(dateKey, segId);
-
-    // show
-    els.sheet.classList.remove("hidden");
-    els.sheet.setAttribute("aria-hidden", "false");
+    segmentEditor.openSegment(dateKey, segId);
   }
 
   function closeSegment(){
-    els.sheet.classList.add("hidden");
-    els.sheet.setAttribute("aria-hidden", "true");
-    setCurrentSegmentId(null);
-  }
-
-  function renderChipSet(container, roster, selected, query){
-    const selSet = new Set(selected);
-    const normalized = String(query || "").trim();
-    const rosterItems = (Array.isArray(roster) ? roster : [])
-      .map((item) => {
-        if(typeof item === "string"){
-          return { id: item, label: item, pinned: false, archived: false, aliases: [] };
-        }
-        return item;
-      })
-      .filter((item) => item && !item.archived);
-
-    const list = normalized
-      ? searchRosterItems(rosterItems, normalized, { includeArchived: false, limit: 60 })
-      : rosterItems.slice().sort((a, b) => {
-        const pin = (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0);
-        if(pin !== 0) return pin;
-        return String(a.label || "").localeCompare(String(b.label || ""));
-      });
-
-    const chips = list.map(item => {
-      const id = item.id || item.label || "";
-      const label = item.label || id;
-      const on = selSet.has(id);
-      const pin = item.pinned ? " pinned" : "";
-      return `<button type="button" class="chip ${on ? "active" : ""}${pin}" data-item="${escapeHtml(id)}">${escapeHtml(label)}</button>`;
-    });
-
-    if(normalized && list.length === 0){
-      chips.push(`<button type="button" class="chip add" data-add="1" data-label="${escapeHtml(normalized)}">+ Add ${escapeHtml(normalized)}</button>`);
-    }
-
-    container.innerHTML = chips.join("");
+    segmentEditor.closeSegment();
   }
 
   function setSegmentedActive(root, value){
-    if(!root) return;
-    const btns = [...root.querySelectorAll(".seg-btn")];
-    btns.forEach(b => b.classList.toggle("active", b.dataset.value === value));
+    segmentEditor.setSegmentedActive(root, value);
   }
 
   function refreshSegmentStatus(dateKey, segId){
-    const day = getDay(dateKey);
-    const seg = day.segments[segId];
-    if(!seg || !els.segStatus) return;
-    setSegmentedActive(els.segStatus, seg.status || "unlogged");
+    segmentEditor.refreshSegmentStatus(dateKey, segId);
   }
 
   function updateSheetHints(dateKey, segId){
-    if(!els.flagHelp) return;
-    const day = getDay(dateKey);
-    const seg = day.segments[segId];
-    if(!seg) return;
-
-    const state = getState();
-    const effective = effectiveSegmentFlags(seg, state.rosters);
-
-    if(effective.seedOilHint && seg.seedOil !== "yes" && seg.seedOil !== "none"){
-      els.flagHelp.textContent = "⚠️ Potential seed oils detected in fats. Check tags.";
-      els.flagHelp.classList.add("warn-text");
-    }else{
-      els.flagHelp.textContent = "Collision auto = fat:dense + carb:starch. High‑fat auto = fat:dense.";
-      els.flagHelp.classList.remove("warn-text");
-    }
+    segmentEditor.updateSheetHints(dateKey, segId);
   }
 
   // --- Daily fields (rituals / signals / notes) ---
   function renderScales(dateKey){
-    const day = getDay(dateKey);
-    buildScale(els.energyScale, "energy", day.energy);
-    buildScale(els.moodScale, "mood", day.mood);
-    buildScale(els.cravingsScale, "cravings", day.cravings);
-  }
-
-  function buildScale(container, field, value){
-    const cur = value || "";
-    container.innerHTML = "";
-    for(let i = 1; i <= 5; i++){
-      const dot = document.createElement("button");
-      dot.type = "button";
-      dot.className = "dot" + (cur === String(i) ? " active" : "");
-      dot.setAttribute("aria-label", `${field} ${i}`);
-      dot.addEventListener("click", () => {
-        const dateKey = yyyyMmDd(getCurrentDate());
-        captureUndo("Signal updated", () => {
-          const day = getDay(dateKey);
-          const next = (day[field] === String(i)) ? "" : String(i);
-          day[field] = next;
-          setDay(dateKey, day);
-        });
-        renderScales(dateKey);
-      });
-      container.appendChild(dot);
-    }
+    renderScalesComponent({
+      els,
+      dateKey,
+      getDay,
+      setDay,
+      getCurrentDate,
+      yyyyMmDd,
+      captureUndo,
+      rerender: renderScales
+    });
   }
 
   function renderRituals(dateKey){
     const day = getDay(dateKey);
-    const setPressed = (btn, on) => btn.setAttribute("aria-pressed", on ? "true" : "false");
-
-    setPressed(els.movedBeforeLunch, day.movedBeforeLunch);
-    setPressed(els.trained, day.trained);
-    setPressed(els.highFatDay, day.highFatDay);
-
-    els.moveSub.textContent = day.movedBeforeLunch ? "Done" : "Not yet";
-    els.trainSub.textContent = day.trained ? "Done" : "Not yet";
-    els.fatDaySub.textContent = day.highFatDay ? "Marked" : "Not yet";
+    renderRitualsComponent({ els, day });
   }
 
   function wireNotes(dateKey){
@@ -1065,55 +781,20 @@ export function createLegacyUI(ctx){
   }
 
   function renderSupplements(dateKey){
-    if(!els.supplementsPanel) return;
     const state = getState();
-    const redacted = !!state.settings?.privacy?.redactHome;
-    const mode = state.settings?.supplementsMode || "none";
-    const enabled = mode && mode !== "none";
-    els.supplementsPanel.hidden = !enabled || redacted;
-    if(!enabled || redacted) return;
-
-    if(els.supplementsModeLabel){
-      const label = (mode === "essential") ? "Essential" : (mode === "advanced" ? "Advanced" : "Off");
-      els.supplementsModeLabel.textContent = label;
-    }
-
     const day = getDay(dateKey);
-    const supp = day.supplements || { mode, items: [], notes: "", tsLast: "" };
-    const selected = new Set(Array.isArray(supp.items) ? supp.items : []);
-
-    if(els.supplementsChips){
-      const list = (Array.isArray(state.rosters?.supplements) ? state.rosters.supplements : [])
-        .filter((item) => item && !item.archived)
-        .slice()
-        .sort((a, b) => {
-          const pin = (b?.pinned ? 1 : 0) - (a?.pinned ? 1 : 0);
-          if(pin !== 0) return pin;
-          return String(a?.label || "").localeCompare(String(b?.label || ""));
-        });
-
-      if(list.length === 0){
-        els.supplementsChips.innerHTML = `<div class="tiny muted">Add supplements in Settings.</div>`;
-      }else{
-        els.supplementsChips.innerHTML = list.map((item) => {
-          const active = selected.has(item.id);
-          const pinned = item.pinned ? " pinned" : "";
-          return `<button class="chip${active ? " active" : ""}${pinned}" data-id="${escapeHtml(item.id)}" type="button">${escapeHtml(item.label || item.id)}</button>`;
-        }).join("");
-        els.supplementsChips.querySelectorAll(".chip").forEach((btn) => {
-          btn.addEventListener("click", () => {
-            const itemId = btn.dataset.id;
-            if(!itemId || typeof actions.toggleSupplementItem !== "function") return;
-            captureUndo("Supplement toggled", () => actions.toggleSupplementItem(dateKey, itemId));
-            renderSupplements(dateKey);
-          });
-        });
+    renderSupplementsComponent({
+      els,
+      state,
+      dateKey,
+      day,
+      escapeHtml,
+      onToggle: (itemId, key) => {
+        if(typeof actions.toggleSupplementItem !== "function") return;
+        captureUndo("Supplement toggled", () => actions.toggleSupplementItem(key, itemId));
+        renderSupplements(key);
       }
-    }
-
-    if(els.supplementsNotes){
-      els.supplementsNotes.value = supp.notes || "";
-    }
+    });
   }
 
   function applyHomeRedaction(){
@@ -1127,113 +808,23 @@ export function createLegacyUI(ctx){
     const dateKey = yyyyMmDd(getCurrentDate());
     els.datePicker.value = dateKey;
 
-    const day = getDay(dateKey);
-    if(!getState().logs[dateKey]){
-      setDay(dateKey, day);
-    }
-
-    if(els.copyYesterday){
-      const canCopy = actions.canCopyYesterday ? actions.canCopyYesterday(dateKey) : false;
-      els.copyYesterday.disabled = !canCopy;
-    }
-
-    renderTimeline(dateKey, day);
-    renderRituals(dateKey);
-    renderScales(dateKey);
-    renderSupplements(dateKey);
-    renderTodayNudge(dateKey);
-    wireNotes(dateKey);
-    applyHomeRedaction();
-  }
-
-  function renderTodayNudge(dateKey){
-    if(!els.todayNudge) return;
-    const settings = getState().settings || {};
-    if(!settings.nudgesEnabled){
-      todayNudgeInsight = null;
-      els.todayNudge.hidden = true;
-      return;
-    }
-
-    const insights = computeInsights({
-      state: getState(),
-      anchorDate: dateFromKey(dateKey),
-      includeDay: true,
-      includeWeek: false
-    }).filter((insight) => insight.scope === "day");
-
-    const pick = insights[0];
-    if(!pick){
-      todayNudgeInsight = null;
-      els.todayNudge.hidden = true;
-      return;
-    }
-
-    todayNudgeInsight = pick;
-    els.todayNudge.hidden = false;
-    if(els.todayNudgeTitle) els.todayNudgeTitle.textContent = pick.title || "Insight";
-    if(els.todayNudgeMessage) els.todayNudgeMessage.textContent = pick.message || "";
-    if(els.todayNudgeReason) els.todayNudgeReason.textContent = pick.reason ? `Reason: ${pick.reason}` : "";
-  }
-
-  function renderSnapshotList(list){
-    if(!els.snapshotList) return;
-    const items = Array.isArray(list) ? list : [];
-    if(items.length === 0){
-      els.snapshotList.innerHTML = `<div class="tiny muted">No snapshots yet.</div>`;
-      return;
-    }
-
-    const sorted = [...items].sort((a, b) => String(b.ts).localeCompare(String(a.ts)));
-    els.snapshotList.innerHTML = sorted.map((snap) => {
-      const label = snap?.label ? String(snap.label) : "Snapshot";
-      const ts = snap?.ts ? String(snap.ts) : "";
-      const pretty = formatSnapshotTime(ts);
-      return `
-        <div class="snapshot-item" data-snapshot-id="${escapeHtml(String(snap?.id || ""))}">
-          <div class="snapshot-meta">
-            <div class="snapshot-label">${escapeHtml(label)}</div>
-            <div class="snapshot-time">${escapeHtml(pretty)}</div>
-          </div>
-          <div class="snapshot-actions">
-            <button class="btn small ghost" type="button" data-action="restore">Restore</button>
-            <button class="btn small ghost" type="button" data-action="delete">Delete</button>
-          </div>
-        </div>
-      `;
-    }).join("");
-
-    els.snapshotList.querySelectorAll("[data-action]").forEach((btn) => {
-      btn.addEventListener("click", async () => {
-        const row = btn.closest(".snapshot-item");
-        const snapshotId = row?.dataset?.snapshotId;
-        if(!snapshotId) return;
-        const label = row?.querySelector(".snapshot-label")?.textContent || "Snapshot";
-        const time = row?.querySelector(".snapshot-time")?.textContent || "";
-        if(btn.dataset.action === "restore"){
-          if(!confirm(`Restore snapshot \"${label}\" (${time})? This will replace current data.`)) return;
-          try{
-            undoState = null;
-            await actions.restoreSnapshot(snapshotId);
-            renderAll();
-            showUndoToast("Snapshot restored");
-          }catch(e){
-            showUndoToast("Snapshot restore failed");
-          }
-          return;
-        }
-        if(btn.dataset.action === "delete"){
-          if(!confirm(`Delete snapshot \"${label}\" (${time})? This cannot be undone.`)) return;
-          try{
-            await actions.deleteSnapshot(snapshotId);
-            renderDiagnostics();
-            showUndoToast("Snapshot deleted");
-          }catch(e){
-            showUndoToast("Snapshot delete failed");
-          }
-        }
-      });
+    const state = getState();
+    const result = renderTodayScreen({
+      els,
+      state,
+      dateKey,
+      getDay,
+      setDay,
+      actions,
+      dateFromKey,
+      renderTimeline,
+      renderRituals,
+      renderScales,
+      renderSupplements,
+      wireNotes,
+      applyHomeRedaction
     });
+    todayNudgeInsight = result?.todayNudgeInsight || null;
   }
 
   function renderDiagnostics(){
@@ -1246,9 +837,35 @@ export function createLegacyUI(ctx){
     };
     setValue(els.diagStorageMode, meta.storageMode);
     setValue(els.diagPersistStatus, meta.persistStatus);
+    if(els.diagSafeMode){
+      const safeMode = meta?.integrity?.safeMode ? "ON" : "OFF";
+      setValue(els.diagSafeMode, safeMode);
+    }
     setValue(els.diagSchemaVersion, String(meta.version || state.version || ""));
     setValue(els.diagAppVersion, meta.appVersion);
     setValue(els.diagInstallId, meta.installId);
+    if(els.diagDstClamp){
+      const dst = meta?.integrity?.dstClamp;
+      let clampLabel = "";
+      if(dst && (dst.applied || dst.ambiguous)){
+        const reason = dst.ambiguous ? "ambiguous time" : "gap";
+        clampLabel = `DST clamp applied (${reason})`;
+      }else if(!dst){
+        const settings = state.settings || {};
+        const now = new Date();
+        const boundaryKeys = ["dayStart", "dayEnd", "ftnEnd", "lunchEnd", "dinnerEnd"];
+        for(const key of boundaryKeys){
+          const minutes = parseTimeToMinutes(settings[key]);
+          const clamp = clampLocalTime(now, minutes);
+          if(clamp.clamped || clamp.reason === "ambiguous"){
+            const reason = clamp.reason === "ambiguous" ? "ambiguous time" : "gap";
+            clampLabel = `DST clamp applied (${reason})`;
+            break;
+          }
+        }
+      }
+      setValue(els.diagDstClamp, clampLabel);
+    }
     if(els.diagSnapshotCount || els.snapshotList){
       const requestId = ++diagSnapshotSeq;
       if(els.diagSnapshotCount){
@@ -1265,249 +882,173 @@ export function createLegacyUI(ctx){
             if(els.diagSnapshotCount){
               setValue(els.diagSnapshotCount, String(items.length));
             }
-            renderSnapshotList(items);
+            renderSnapshotListComponent({
+              container: els.snapshotList,
+              list: items,
+              formatSnapshotTime,
+              escapeHtml,
+              onRestore: async (snapshotId) => {
+                try{
+                  undoState = null;
+                  await actions.restoreSnapshot(snapshotId);
+                  renderAll();
+                  showUndoToast("Snapshot restored");
+                }catch(e){
+                  showUndoToast("Snapshot restore failed");
+                }
+              },
+              onDelete: async (snapshotId) => {
+                try{
+                  await actions.deleteSnapshot(snapshotId);
+                  renderDiagnostics();
+                  showUndoToast("Snapshot deleted");
+                }catch(e){
+                  showUndoToast("Snapshot delete failed");
+                }
+              }
+            });
           })
           .catch(() => {
             if(requestId !== diagSnapshotSeq) return;
             if(els.diagSnapshotCount){
               setValue(els.diagSnapshotCount, "—");
             }
-            renderSnapshotList([]);
+            renderSnapshotListComponent({
+              container: els.snapshotList,
+              list: [],
+              formatSnapshotTime,
+              escapeHtml,
+              onRestore: null,
+              onDelete: null
+            });
           });
       }else{
         if(els.diagSnapshotCount){
           setValue(els.diagSnapshotCount, "—");
         }
-        renderSnapshotList([]);
+        renderSnapshotListComponent({
+          container: els.snapshotList,
+          list: [],
+          formatSnapshotTime,
+          escapeHtml,
+          onRestore: null,
+          onDelete: null
+        });
       }
+    }
+
+    if(els.auditLogList){
+      const requestId = ++auditLogSeq;
+      els.auditLogList.innerHTML = `<div class="tiny muted">Loading…</div>`;
+      if(typeof actions.listAuditLog === "function"){
+        actions.listAuditLog()
+          .then((list) => {
+            if(requestId !== auditLogSeq) return;
+            auditLogCache = Array.isArray(list) ? list : [];
+            renderAuditLogComponent({
+              container: els.auditLogList,
+              list: auditLogCache,
+              filter: els.auditFilter ? els.auditFilter.value : "all",
+              formatSnapshotTime,
+              escapeHtml
+            });
+          })
+          .catch(() => {
+            if(requestId !== auditLogSeq) return;
+            auditLogCache = [];
+            renderAuditLogComponent({
+              container: els.auditLogList,
+              list: [],
+              filter: els.auditFilter ? els.auditFilter.value : "all",
+              formatSnapshotTime,
+              escapeHtml
+            });
+          });
+      }else{
+        auditLogCache = [];
+        renderAuditLogComponent({
+          container: els.auditLogList,
+          list: [],
+          filter: els.auditFilter ? els.auditFilter.value : "all",
+          formatSnapshotTime,
+          escapeHtml
+        });
+      }
+    }
+
+    if(els.diagMissingItems){
+      missingRosterItems = collectMissingRosterItems(state.rosters, state.logs);
+      setValue(els.diagMissingItems, String(missingRosterItems.size));
+      els.diagMissingItems.title = missingRosterItems.size ? "Click to repair missing roster IDs" : "";
+    }
+  }
+
+  function renderSyncStatus(){
+    if(!els.syncStatus) return;
+    const sync = getState()?.meta?.sync || {};
+    let label = "Offline";
+    if(sync.status === "syncing") label = "Syncing";
+    else if(sync.status === "idle" || sync.status === "") label = "Idle";
+    else if(sync.status === "error") label = "Error";
+    else if(sync.status === "offline") label = "Offline";
+    const pending = Number.isFinite(sync.pendingOutbox) ? sync.pendingOutbox : 0;
+    els.syncStatus.textContent = pending > 0 ? `${label} • ${pending}` : label;
+    if(els.outboxBadge){
+      if(pending > 0){
+        els.outboxBadge.hidden = false;
+        els.outboxBadge.textContent = String(pending);
+      }else{
+        els.outboxBadge.hidden = true;
+        els.outboxBadge.textContent = "0";
+      }
+    }
+    if(sync.lastSyncTs){
+      els.syncStatus.title = `Last sync: ${formatSnapshotTime(sync.lastSyncTs)}`;
+    }else{
+      els.syncStatus.title = "";
     }
   }
 
   function renderHistory(){
     const state = getState();
-    const keys = Object.keys(state.logs).sort().reverse();
-    const list = keys.slice(0, 30);
-
-    els.historyList.innerHTML = list.map(k => {
-      const d = state.logs[k];
-      const all = mergeDayDiversity(d);
-      const issues = countIssues(d, state.rosters);
-      return `
-        <div class="day-item" data-date="${k}">
-          <div class="left">
-            <div class="d">${escapeHtml(k)}</div>
-            <div class="s">P${all.proteins} • C${all.carbs} • F${all.fats} • μ${all.micros}</div>
-          </div>
-          <div class="right">
-          ${issues.collision ? "×" : ""}
-          ${issues.seedOil ? "⚠" : ""}
-          ${issues.highFat ? "◎" : ""}
-          <span>›</span>
-          </div>
-        </div>
-      `;
-    }).join("");
-
-    els.historyList.querySelectorAll(".day-item").forEach(el => {
-      el.addEventListener("click", () => {
-        const k = el.dataset.date;
+    renderHistoryScreen({
+      els,
+      state,
+      escapeHtml,
+      onSelectDay: (k) => {
+        if(!k) return;
         setCurrentDate(new Date(k + "T12:00:00"));
         setActiveTab("today");
-        renderToday();
-      });
-    });
-
-    if(els.exportBtn){
-      const encDefault = !!(state.settings?.privacy && state.settings.privacy.exportEncryptedByDefault);
-      const primaryMode = encDefault ? "encrypted" : "plain";
-      const altMode = encDefault ? "plain" : "encrypted";
-      els.exportBtn.textContent = encDefault ? "Export encrypted" : "Export JSON";
-      els.exportBtn.dataset.mode = primaryMode;
-      if(els.exportAltBtn){
-        els.exportAltBtn.textContent = encDefault ? "Export JSON" : "Export encrypted";
-        els.exportAltBtn.dataset.mode = altMode;
-        els.exportAltBtn.hidden = false;
+        markViewDirty("today");
+        queueRender("main");
       }
-    }
+    });
 
     renderDiagnostics();
   }
 
   function renderReview(){
-    if(!els.coverageMatrix) return;
     const state = getState();
-    const rawWeekStart = state.settings.weekStart;
-    const parsedWeekStart = Number.isFinite(rawWeekStart) ? rawWeekStart : Number.parseInt(rawWeekStart, 10);
-    const weekStart = Number.isFinite(parsedWeekStart) && parsedWeekStart >= 0 && parsedWeekStart <= 6
-      ? parsedWeekStart
-      : 0;
-    const anchor = getCurrentDate();
-    const summary = computeWeeklySummary({
-      logs: state.logs,
-      rosters: state.rosters,
-      anchorDate: anchor,
-      weekStart,
-      phase: state.settings.phase || ""
-    });
-    const dateKeys = summary.dateKeys || [];
-    const matrix = summary.matrix || [];
-
-    if(els.reviewRange){
-      const start = dateKeys[0] || "—";
-      const end = dateKeys[dateKeys.length - 1] || "—";
-      els.reviewRange.textContent = `${start} → ${end}`;
-    }
-
-    if(els.reviewIssues){
-      const issues = summary.issueFrequency || { collisionDays: 0, seedOilDays: 0, highFatMealDays: 0, highFatDayDays: 0 };
-      const totalDays = dateKeys.length || 0;
-      els.reviewIssues.innerHTML = `
-        <div class="issue-chip">Collision days: ${issues.collisionDays}/${totalDays}</div>
-        <div class="issue-chip">Seed‑oil days: ${issues.seedOilDays}/${totalDays}</div>
-        <div class="issue-chip">High‑fat meals: ${issues.highFatMealDays}/${totalDays}</div>
-        <div class="issue-chip">High‑fat day toggles: ${issues.highFatDayDays}/${totalDays}</div>
-      `;
-    }
-
-    if(els.reviewSummary){
-      const counts = summary.uniqueCounts || { proteins: 0, carbs: 0, fats: 0, micros: 0 };
-      const ftn = summary.ftnSummary || { strict: 0, lite: 0, off: 0, unset: 0, loggedDays: 0, days: 0 };
-      els.reviewSummary.textContent = `Unique: P${counts.proteins} • C${counts.carbs} • F${counts.fats} • μ${counts.micros} • FTN strict ${ftn.strict}, lite ${ftn.lite}, off ${ftn.off}`;
-    }
-    if(els.reviewPhase){
-      els.reviewPhase.textContent = summary.phaseLabel || "";
-    }
-
-    if(els.reviewCorrelations){
-      const correlations = Array.isArray(summary.correlations) ? summary.correlations : [];
-      const fmtAvg = (value) => (value == null ? "—" : value.toFixed(2));
-      const rows = correlations.map((entry) => {
-        const line = `${entry.a.label}: ${fmtAvg(entry.a.avg)} (n=${entry.a.count}) vs ${entry.b.label}: ${fmtAvg(entry.b.avg)} (n=${entry.b.count})`;
-        return `
-          <div class="corr-row">
-            <div class="corr-title">${escapeHtml(entry.label)}</div>
-            <div class="corr-line">${escapeHtml(line)} • Observed in ${entry.total} days</div>
-          </div>
-        `;
-      }).join("");
-      els.reviewCorrelations.innerHTML = rows || `<div class="tiny muted">No correlations yet.</div>`;
-    }
-
-    if(els.reviewInsights){
-      reviewInsights = computeInsights({ state, anchorDate: anchor, includeDay: true, includeWeek: true });
-      const dayInsights = reviewInsights.filter((insight) => insight.scope === "day");
-      const weekInsights = reviewInsights.filter((insight) => insight.scope === "week");
-      const toneLabel = (tone) => {
-        if(tone === "warn") return "Warn";
-        if(tone === "nudge") return "Nudge";
-        return "Info";
-      };
-      const renderCard = (entry) => {
-        const tone = entry.tone || "info";
-        return `
-          <div class="insight-card tone-${escapeHtml(tone)}">
-            <div class="insight-header">
-              <div class="insight-meta">${escapeHtml(toneLabel(tone))}</div>
-              <button class="btn ghost tinybtn" data-action="dismiss-insight" data-insight-id="${escapeHtml(entry.id)}" type="button">Dismiss</button>
-            </div>
-            <div class="insight-title">${escapeHtml(entry.title || "")}</div>
-            <div class="insight-message">${escapeHtml(entry.message || "")}</div>
-            <div class="insight-reason">Reason: ${escapeHtml(entry.reason || "")}</div>
-          </div>
-        `;
-      };
-      const renderGroup = (label, items) => `
-        <div class="insight-group">
-          <div class="insight-group-title">${escapeHtml(label)}</div>
-          ${items.map(renderCard).join("")}
-        </div>
-      `;
-      const blocks = [];
-      if(dayInsights.length){
-        blocks.push(renderGroup(`Day • ${dayInsights[0].scopeKey}`, dayInsights));
-      }
-      if(weekInsights.length){
-        blocks.push(renderGroup(`Week of ${weekInsights[0].scopeKey}`, weekInsights));
-      }
-      els.reviewInsights.innerHTML = blocks.join("") || `<div class="tiny muted">No insights yet.</div>`;
-    }
-
-    const head = `
-      <div class="matrix-row matrix-head">
-        <div class="matrix-date">Day</div>
-        <div class="matrix-cell">P</div>
-        <div class="matrix-cell">C</div>
-        <div class="matrix-cell">F</div>
-        <div class="matrix-cell">μ</div>
-        <div class="matrix-cell">×</div>
-        <div class="matrix-cell">⚠</div>
-        <div class="matrix-cell">◎</div>
-      </div>
-    `;
-
-    const rows = matrix.map((row) => {
-      const cell = (value, col) => {
-        const empty = value === 0 || value === "—";
-        const content = (value === 0) ? "—" : value;
-        const cls = empty ? "matrix-cell empty" : "matrix-cell";
-        return `<div class="${cls}" data-col="${col}">${content}</div>`;
-      };
-      const flag = (on, glyph, col) => `<div class="matrix-cell flag ${on ? "on" : "empty"}" data-col="${col}">${on ? glyph : "—"}</div>`;
-      return `
-        <div class="matrix-row" data-date="${escapeHtml(row.dateKey)}">
-          <div class="matrix-date">${escapeHtml(row.dateKey)}</div>
-          ${cell(row.counts.proteins, "proteins")}
-          ${cell(row.counts.carbs, "carbs")}
-          ${cell(row.counts.fats, "fats")}
-          ${cell(row.counts.micros, "micros")}
-          ${flag(row.flags.collision, "×", "collision")}
-          ${flag(row.flags.seedOil, "⚠", "seedOil")}
-          ${flag(row.flags.highFat, "◎", "highFat")}
-        </div>
-      `;
-    }).join("");
-
-    els.coverageMatrix.innerHTML = head + rows;
-    els.coverageMatrix.querySelectorAll(".matrix-row[data-date]").forEach((row) => {
-      row.addEventListener("click", (e) => {
-        const key = row.dataset.date;
-        if(!key) return;
-        const target = e.target.closest(".matrix-cell");
-        const col = target?.dataset?.col || "";
+    const anchorDate = getCurrentDate();
+    const result = renderReviewScreen({
+      els,
+      state,
+      anchorDate,
+      escapeHtml,
+      onMatrixSelect: (key, col) => {
         setCurrentDate(new Date(key + "T12:00:00"));
         setActiveTab("today");
-        renderToday();
+        markViewDirty("today");
+        queueRender("main");
         if(col){
           const segId = findSegmentForMatrixCell(getDay(key), col);
           if(segId){
             openSegment(key, segId);
           }
         }
-      });
+      }
     });
-
-    if(els.rotationPicks){
-      const picks = computeRotationPicks({ rosters: state.rosters, logs: state.logs }, { limitPerCategory: 2, dateKeys });
-      const labelMap = {
-        proteins: "Proteins",
-        carbs: "Carbs",
-        fats: "Fats",
-        micros: "Accoutrements (μ)"
-      };
-      const rowsHtml = Object.keys(labelMap).map((cat) => {
-        const items = picks[cat] || [];
-        const chips = items.length
-          ? items.map((item) => `<span class="chip">${escapeHtml(item.label)}</span>`).join("")
-          : `<span class="tiny muted">No picks yet</span>`;
-        return `
-          <div class="pick-row">
-            <div class="pick-label">${labelMap[cat]}</div>
-            <div class="pick-items">${chips}</div>
-          </div>
-        `;
-      }).join("");
-      els.rotationPicks.innerHTML = rowsHtml;
-    }
+    reviewInsights = Array.isArray(result?.insights) ? result.insights : [];
   }
 
   function findSegmentForMatrixCell(day, col){
@@ -1572,51 +1113,7 @@ export function createLegacyUI(ctx){
 
   function renderRosterList(category, container){
     const state = getState();
-    const items = (Array.isArray(state.rosters[category]) ? state.rosters[category] : [])
-      .map((entry) => {
-        if(typeof entry === "string"){
-          return { id: entry, label: entry, aliases: [], tags: [], pinned: false, archived: false };
-        }
-        return entry;
-      });
-    const sorted = items
-      .slice()
-      .sort((a, b) => {
-        const aArch = a?.archived ? 1 : 0;
-        const bArch = b?.archived ? 1 : 0;
-        if(aArch !== bArch) return aArch - bArch;
-        const pin = (b?.pinned ? 1 : 0) - (a?.pinned ? 1 : 0);
-        if(pin !== 0) return pin;
-        return String(a?.label || "").localeCompare(String(b?.label || ""));
-      });
-
-    container.innerHTML = sorted.map(item => {
-      const id = item?.id || "";
-      const label = item?.label || "";
-      const aliases = Array.isArray(item?.aliases) ? item.aliases.join(", ") : "";
-      const tags = Array.isArray(item?.tags) ? item.tags.join(", ") : "";
-      const pinned = item?.pinned ? "active" : "";
-      const archived = item?.archived ? "active" : "";
-      const archivedClass = item?.archived ? " archived" : "";
-      return `
-        <div class="roster-item${archivedClass}" data-id="${escapeHtml(id)}">
-          <div class="roster-row">
-            <input class="roster-input" type="text" data-field="label" value="${escapeHtml(label)}" />
-            <div class="roster-actions">
-              <button class="btn ghost tinybtn ${pinned}" type="button" data-action="pin">${item?.pinned ? "Pinned" : "Pin"}</button>
-              <button class="btn ghost tinybtn ${archived}" type="button" data-action="archive">${item?.archived ? "Archived" : "Archive"}</button>
-              <button class="btn ghost tinybtn" type="button" data-action="remove">Remove</button>
-            </div>
-          </div>
-          <div class="roster-row">
-            <input class="roster-input" type="text" data-field="aliases" placeholder="Aliases (comma-separated)" value="${escapeHtml(aliases)}" />
-          </div>
-          <div class="roster-row">
-            <input class="roster-input" type="text" data-field="tags" placeholder="Tags (comma-separated)" value="${escapeHtml(tags)}" />
-          </div>
-        </div>
-      `;
-    }).join("");
+    renderRosterListComponent(category, container, state.rosters[category], escapeHtml);
   }
 
   function wireRosterContainer(category, container){
@@ -1677,23 +1174,26 @@ export function createLegacyUI(ctx){
 
       if(action === "pin"){
         captureUndo("Roster pin toggled", () => actions.toggleRosterPinned(category, itemId));
-        renderSettings();
-        renderToday();
+        markViewDirty("settings");
+        markViewDirty("today");
+        queueRender("main");
         return;
       }
 
       if(action === "archive"){
         captureUndo("Roster archive toggled", () => actions.toggleRosterArchived(category, itemId));
-        renderSettings();
-        renderToday();
+        markViewDirty("settings");
+        markViewDirty("today");
+        queueRender("main");
         return;
       }
 
       if(action === "remove"){
         if(confirm("Remove this item? This removes it from all logs.")){
           captureUndo("Roster item removed", () => actions.removeRosterItem(category, itemId));
-          renderSettings();
-          renderToday();
+          markViewDirty("settings");
+          markViewDirty("today");
+          queueRender("main");
         }
       }
     });
@@ -1701,94 +1201,106 @@ export function createLegacyUI(ctx){
 
   function renderSettings(){
     const state = getState();
-    const s = state.settings;
-    els.setDayStart.value = s.dayStart;
-    els.setDayEnd.value = s.dayEnd;
-    els.setFtnEnd.value = s.ftnEnd;
-    els.setLunchEnd.value = s.lunchEnd;
-    els.setDinnerEnd.value = s.dinnerEnd;
-    els.setSunrise.value = s.sunrise;
-    els.setSunset.value = s.sunset;
-    els.setSunMode.value = s.sunMode || "manual";
-    els.setPhase.value = s.phase || "";
-    els.setFocusMode.value = s.focusMode || "nowfade";
-    if(els.setWeekStart){
-      const weekStart = Number.isFinite(s.weekStart) ? s.weekStart : 0;
-      els.setWeekStart.value = String(weekStart);
-    }
-    if(els.setSupplementsMode){
-      els.setSupplementsMode.value = s.supplementsMode || "none";
-    }
+    renderSettingsScreen({
+      els,
+      state,
+      setSunAutoStatus,
+      formatLatLon,
+      refreshPrivacyBlur,
+      renderRosterList,
+      canUseCrypto,
+      hasAppLockSecret
+    });
+    renderSyncControls();
+  }
 
-    const autoSun = (s.sunMode === "auto");
-    els.setSunrise.disabled = autoSun;
-    els.setSunset.disabled = autoSun;
-    if(els.sunAutoBtn){
-      els.sunAutoBtn.disabled = !(navigator && navigator.geolocation);
+  function renderSyncControls(){
+    if(els.syncE2eeToggle){
+      const enc = getState()?.settings?.sync?.encryption === "e2ee" ? "e2ee" : "none";
+      els.syncE2eeToggle.value = enc;
     }
-    if(autoSun){
-      if(Number.isFinite(s.lastKnownLat) && Number.isFinite(s.lastKnownLon)){
-        setSunAutoStatus(`Auto active • ${formatLatLon(s.lastKnownLat, s.lastKnownLon)}`);
-      }else{
-        setSunAutoStatus("Auto active • tap Update from location");
-      }
-    }else{
-      setSunAutoStatus("Auto off • tap Update from location to enable");
-    }
-
-    if(els.privacyBlurToggle){
-      els.privacyBlurToggle.checked = !!(s.privacy && s.privacy.blurOnBackground);
-    }
-    if(els.privacyAppLockToggle){
-      els.privacyAppLockToggle.checked = !!(s.privacy && s.privacy.appLock);
-    }
-    if(els.appLockSetBtn){
-      els.appLockSetBtn.disabled = !canUseCrypto();
-      const hasPasscode = hasAppLockSecret();
-      els.appLockSetBtn.textContent = hasPasscode ? "Change passcode" : "Set passcode";
-    }
-    if(els.privacyRedactToggle){
-      els.privacyRedactToggle.checked = !!(s.privacy && s.privacy.redactHome);
-    }
-    if(els.privacyEncryptedToggle){
-      els.privacyEncryptedToggle.checked = !!(s.privacy && s.privacy.exportEncryptedByDefault);
-    }
-    if(els.todayNudgeToggle){
-      els.todayNudgeToggle.checked = !!s.nudgesEnabled;
-    }
-    refreshPrivacyBlur();
-
-    renderRosterList("proteins", els.rosterProteins);
-    renderRosterList("carbs", els.rosterCarbs);
-    renderRosterList("fats", els.rosterFats);
-    renderRosterList("micros", els.rosterMicros);
-    if(els.rosterSupplements){
-      const enabled = !!(s.supplementsMode && s.supplementsMode !== "none");
-      if(els.rosterSupplementsBlock){
-        els.rosterSupplementsBlock.hidden = !enabled;
-      }
-      if(enabled){
-        renderRosterList("supplements", els.rosterSupplements);
-      }else{
-        els.rosterSupplements.innerHTML = "";
-      }
+    if(els.syncLinkStatus && typeof actions.getSyncLink === "function"){
+      actions.getSyncLink()
+        .then((link) => {
+          if(!els.syncLinkStatus) return;
+          els.syncLinkStatus.textContent = link
+            ? "Sync link ready. Keep it private."
+            : "No sync link configured.";
+        })
+        .catch(() => {
+          if(!els.syncLinkStatus) return;
+          els.syncLinkStatus.textContent = "Sync link unavailable.";
+        });
     }
   }
 
+  function markAllViewsDirty(){
+    dirtyViews.add("today");
+    dirtyViews.add("history");
+    dirtyViews.add("review");
+    dirtyViews.add("settings");
+  }
+
+  function markViewDirty(view){
+    dirtyViews.add(view);
+  }
+
+  function renderActive(){
+    renderSyncStatus();
+    if(activeTab === "history"){
+      if(dirtyViews.has("history")){
+        renderHistory();
+        dirtyViews.delete("history");
+      }
+      return;
+    }
+    if(activeTab === "review"){
+      if(dirtyViews.has("review")){
+        renderReview();
+        dirtyViews.delete("review");
+      }
+      return;
+    }
+    if(activeTab === "settings"){
+      if(dirtyViews.has("settings")){
+        renderSettings();
+        dirtyViews.delete("settings");
+      }
+      return;
+    }
+    if(dirtyViews.has("today")){
+      renderToday();
+      dirtyViews.delete("today");
+    }
+  }
+
+  const renderScheduler = createRenderScheduler({
+    main: () => renderActive(),
+    overlays: () => {
+      applyAppLock();
+      refreshPrivacyBlur();
+    }
+  });
+
+  function queueRender(region = "main"){
+    renderScheduler.markDirty(region);
+  }
+
+  function queueRenderAll(){
+    markAllViewsDirty();
+    renderScheduler.renderAll();
+  }
+
   function renderAll(){
-    renderToday();
-    renderHistory();
-    renderReview();
-    renderSettings();
-    applyAppLock();
+    queueRenderAll();
   }
 
   function wire(){
     // tabs
-    els.tabToday.addEventListener("click", () => { setActiveTab("today"); renderToday(); });
-    els.tabHistory.addEventListener("click", () => { setActiveTab("history"); renderHistory(); });
-    els.tabReview.addEventListener("click", () => { setActiveTab("review"); renderReview(); });
-    els.tabSettings.addEventListener("click", () => { setActiveTab("settings"); renderSettings(); });
+    els.tabToday.addEventListener("click", () => { setActiveTab("today"); queueRender("main"); });
+    els.tabHistory.addEventListener("click", () => { setActiveTab("history"); queueRender("main"); });
+    els.tabReview.addEventListener("click", () => { setActiveTab("review"); queueRender("main"); });
+    els.tabSettings.addEventListener("click", () => { setActiveTab("settings"); queueRender("main"); });
 
     if(els.appLockSubmit){
       els.appLockSubmit.addEventListener("click", () => {
@@ -1806,6 +1318,7 @@ export function createLegacyUI(ctx){
 
     if(els.reviewInsights){
       els.reviewInsights.addEventListener("click", (e) => {
+        if(blockIfSafeMode()) return;
         const btn = e.target.closest("button[data-action='dismiss-insight']");
         if(!btn) return;
         if(typeof actions.dismissInsight !== "function") return;
@@ -1814,17 +1327,31 @@ export function createLegacyUI(ctx){
         const insight = reviewInsights.find((item) => item.id === insightId);
         if(!insight) return;
         actions.dismissInsight(insight);
-        renderReview();
+        markViewDirty("review");
+        queueRender("main");
+      });
+    }
+
+    if(els.auditFilter){
+      els.auditFilter.addEventListener("change", () => {
+        renderAuditLogComponent({
+          container: els.auditLogList,
+          list: auditLogCache,
+          filter: els.auditFilter ? els.auditFilter.value : "all",
+          formatSnapshotTime,
+          escapeHtml
+        });
       });
     }
 
     // date nav
-    els.prevDay.addEventListener("click", () => { setCurrentDate(addDays(getCurrentDate(), -1)); renderToday(); });
-    els.nextDay.addEventListener("click", () => { setCurrentDate(addDays(getCurrentDate(), 1)); renderToday(); });
+    els.prevDay.addEventListener("click", () => { setCurrentDate(addDays(getCurrentDate(), -1)); markViewDirty("today"); queueRender("main"); });
+    els.nextDay.addEventListener("click", () => { setCurrentDate(addDays(getCurrentDate(), 1)); markViewDirty("today"); queueRender("main"); });
     els.datePicker.addEventListener("change", () => {
       if(els.datePicker.value){
         setCurrentDate(new Date(els.datePicker.value + "T12:00:00"));
-        renderToday();
+        markViewDirty("today");
+        queueRender("main");
       }
     });
     if(els.copyYesterday){
@@ -1832,17 +1359,43 @@ export function createLegacyUI(ctx){
     }
     if(els.todayNudgeDismiss){
       els.todayNudgeDismiss.addEventListener("click", () => {
+        if(blockIfSafeMode()) return;
         if(!todayNudgeInsight) return;
         actions.dismissInsight?.(todayNudgeInsight);
         todayNudgeInsight = null;
-        renderToday();
+        markViewDirty("today");
+        queueRender("main");
+      });
+    }
+    if(els.diagMissingItems){
+      els.diagMissingItems.addEventListener("click", () => {
+        if(blockIfSafeMode()) return;
+        if(!missingRosterItems || missingRosterItems.size === 0) return;
+        if(typeof actions.addRosterItemWithId !== "function") return;
+        const ok = confirm(`Repair ${missingRosterItems.size} missing roster IDs?`);
+        if(!ok) return;
+        for(const [id, category] of missingRosterItems){
+          const shortId = String(id).slice(0, 8);
+          const label = prompt(
+            `Missing roster ID in ${category}: ${id}\nEnter label to create (blank to skip).`,
+            `Missing ${shortId}`
+          );
+          if(label === null) break;
+          const trimmed = label.trim();
+          if(!trimmed) continue;
+          actions.addRosterItemWithId(category, id, trimmed);
+        }
+        markAllViewsDirty();
+        queueRender("main");
       });
     }
 
     // focus toggle
     els.toggleFocus.addEventListener("click", () => {
+      if(blockIfSafeMode()) return;
       actions.toggleFocusMode();
-      renderToday();
+      markViewDirty("today");
+      queueRender("main");
     });
 
     // rituals
@@ -1858,7 +1411,7 @@ export function createLegacyUI(ctx){
     });
     els.highFatDay.addEventListener("click", () => {
       const dateKey = yyyyMmDd(getCurrentDate());
-      captureUndo("High-fat day", () => actions.toggleBoolField(dateKey, "highFatDay"));
+      captureUndo("High-fat day", () => actions.toggleTriField(dateKey, "highFatDay"));
       renderRituals(dateKey);
     });
 
@@ -2021,6 +1574,7 @@ export function createLegacyUI(ctx){
 
     if(els.appLockSetBtn){
       els.appLockSetBtn.addEventListener("click", async () => {
+        if(blockIfSafeMode()) return;
         if(!canUseCrypto()){
           alert("App lock requires WebCrypto.");
           return;
@@ -2044,8 +1598,108 @@ export function createLegacyUI(ctx){
       });
     }
 
+    if(els.syncLinkApply){
+      els.syncLinkApply.addEventListener("click", async () => {
+        if(blockIfSafeMode()) return;
+        const link = els.syncLinkInput?.value || "";
+        if(!link.trim()){
+          alert("Paste a sync link first.");
+          return;
+        }
+        if(typeof actions.applySyncLink !== "function") return;
+        const result = await actions.applySyncLink(link.trim());
+        if(!result?.ok){
+          alert(result?.error || "Sync link failed.");
+          return;
+        }
+        els.syncLinkInput.value = "";
+        if(result.e2ee && typeof actions.setSyncPassphrase === "function"){
+          const passphrase = prompt("Enter sync passphrase:");
+          if(passphrase){
+            await actions.setSyncPassphrase(passphrase);
+          }
+        }
+        renderSyncControls();
+        showUndoToast("Sync link applied");
+      });
+    }
+
+    if(els.syncLinkCopy){
+      els.syncLinkCopy.addEventListener("click", async () => {
+        if(typeof actions.getSyncLink !== "function") return;
+        const link = await actions.getSyncLink();
+        if(!link){
+          alert("No sync link configured yet.");
+          return;
+        }
+        try{
+          await navigator.clipboard.writeText(link);
+          showUndoToast("Sync link copied");
+        }catch(e){
+          prompt("Copy your sync link:", link);
+        }
+      });
+    }
+
+    if(els.syncNowBtn){
+      els.syncNowBtn.addEventListener("click", async () => {
+        if(blockIfSafeMode()) return;
+        if(typeof actions.syncNow !== "function") return;
+        await actions.syncNow();
+        renderSyncControls();
+      });
+    }
+
+    if(els.syncResetSpace){
+      els.syncResetSpace.addEventListener("click", async () => {
+        if(blockIfSafeMode()) return;
+        const ok = confirm("Reset sync space? This clears credentials and outbox.");
+        if(!ok) return;
+        if(typeof actions.resetSyncSpace !== "function") return;
+        await actions.resetSyncSpace();
+        renderSyncControls();
+        showUndoToast("Sync reset");
+      });
+    }
+
+    if(els.syncE2eeToggle){
+      els.syncE2eeToggle.addEventListener("change", async () => {
+        if(blockIfSafeMode()) return;
+        const prev = getState()?.settings?.sync?.encryption === "e2ee" ? "e2ee" : "none";
+        const next = els.syncE2eeToggle.value === "e2ee" ? "e2ee" : "none";
+        if(typeof actions.setSyncEncryption !== "function") return;
+        if(next === "e2ee"){
+          const passphrase = prompt("Set a sync passphrase (required):");
+          if(!passphrase){
+            els.syncE2eeToggle.value = prev;
+            return;
+          }
+          const confirmPass = prompt("Confirm passphrase:");
+          if(confirmPass !== passphrase){
+            alert("Passphrases did not match.");
+            els.syncE2eeToggle.value = prev;
+            return;
+          }
+          const result = await actions.setSyncEncryption("e2ee", passphrase);
+          if(!result?.ok){
+            alert(result?.error || "Failed to enable E2EE.");
+            els.syncE2eeToggle.value = prev;
+            if(result?.error && els.syncLinkStatus){
+              els.syncLinkStatus.textContent = result.error;
+            }
+          }
+        }else{
+          const result = await actions.setSyncEncryption("none");
+          if(!result?.ok && result?.error && els.syncLinkStatus){
+            els.syncLinkStatus.textContent = result.error;
+          }
+        }
+      });
+    }
+
     // settings save/reset
     els.saveSettings.addEventListener("click", async () => {
+      if(blockIfSafeMode()) return;
       const parsedWeekStart = Number.parseInt(els.setWeekStart?.value || "", 10);
       const existingPrivacy = getState().settings?.privacy || {};
       let nextAppLock = !!els.privacyAppLockToggle?.checked;
@@ -2055,6 +1709,8 @@ export function createLegacyUI(ctx){
       const redactHome = !!els.privacyRedactToggle?.checked;
       const exportEncryptedByDefault = !!els.privacyEncryptedToggle?.checked;
       const nudgesEnabled = !!els.todayNudgeToggle?.checked;
+      const syncEncryption = els.syncE2eeToggle?.value === "e2ee" ? "e2ee" : "none";
+      const existingSync = getState().settings?.sync || {};
 
       if(nextAppLock && !hasPasscode){
         const ok = await ensureAppLockPasscode();
@@ -2097,6 +1753,10 @@ export function createLegacyUI(ctx){
         weekStart: Number.isFinite(parsedWeekStart) ? parsedWeekStart : defaults.DEFAULT_SETTINGS.weekStart,
         nudgesEnabled,
         supplementsMode: els.setSupplementsMode?.value || "none",
+        sync: {
+          ...existingSync,
+          encryption: syncEncryption
+        },
         privacy: {
           appLock: nextAppLock,
           redactHome,
@@ -2129,6 +1789,10 @@ export function createLegacyUI(ctx){
     if(els.privacyBlurToggle){
       els.privacyBlurToggle.addEventListener("change", () => {
         const enabled = !!els.privacyBlurToggle.checked;
+        if(blockIfSafeMode()){
+          els.privacyBlurToggle.checked = !!getState().settings?.privacy?.blurOnBackground;
+          return;
+        }
         captureUndo("Privacy blur updated", () => actions.updateSettings({ privacy: { blurOnBackground: enabled } }));
         refreshPrivacyBlur();
       });
@@ -2137,8 +1801,13 @@ export function createLegacyUI(ctx){
     if(els.privacyRedactToggle){
       els.privacyRedactToggle.addEventListener("change", () => {
         const enabled = !!els.privacyRedactToggle.checked;
+        if(blockIfSafeMode()){
+          els.privacyRedactToggle.checked = !!getState().settings?.privacy?.redactHome;
+          return;
+        }
         captureUndo("Home redaction updated", () => actions.updateSettings({ privacy: { redactHome: enabled } }));
-        renderToday();
+        markViewDirty("today");
+        queueRender("main");
       });
     }
 
@@ -2166,8 +1835,9 @@ export function createLegacyUI(ctx){
         const name = prompt(`Add to ${cat}:`);
         if(!name) return;
         captureUndo("Roster item added", () => actions.addRosterItem(cat, name));
-        renderSettings();
-        renderToday();
+        markViewDirty("settings");
+        markViewDirty("today");
+        queueRender("main");
       });
     });
 
@@ -2179,195 +1849,28 @@ export function createLegacyUI(ctx){
       wireRosterContainer("supplements", els.rosterSupplements);
     }
 
-    // sheet close
-    els.sheetBackdrop.addEventListener("click", closeSegment);
-    els.closeSheet.addEventListener("click", closeSegment);
-    els.doneSegment.addEventListener("click", closeSegment);
-
-    // sheet clear
-    els.clearSegment.addEventListener("click", () => {
-      const currentSegmentId = getCurrentSegmentId();
-      if(!currentSegmentId) return;
-      const dateKey = yyyyMmDd(getCurrentDate());
-      captureUndo("Segment cleared", () => actions.clearSegment(dateKey, currentSegmentId));
-      openSegment(dateKey, currentSegmentId); // refresh UI
-      updateSegmentVisual(dateKey, currentSegmentId);
-    });
-
-    // sheet chips (event delegation)
-    const wireChipContainer = (container, category) => {
-      let longPressTimer = null;
-      let longPressFired = false;
-
-      const clearLongPress = () => {
-        if(longPressTimer) clearTimeout(longPressTimer);
-        longPressTimer = null;
-      };
-
-      container.addEventListener("pointerdown", (e) => {
-        if(e.button !== undefined && e.button !== 0) return;
-        const btn = e.target.closest(".chip");
-        if(!btn) return;
-        if(btn.dataset.add === "1") return;
-        const item = btn.dataset.item;
-        if(!item) return;
-        longPressFired = false;
-        clearLongPress();
-        longPressTimer = setTimeout(() => {
-          longPressFired = true;
-          btn.dataset.longpress = "1";
-          captureUndo("Roster pin toggled", () => actions.toggleRosterPinned(category, item));
-          renderSettings();
-          renderCategoryChips(category);
-        }, 520);
-      });
-
-      container.addEventListener("pointerup", clearLongPress);
-      container.addEventListener("pointerleave", clearLongPress);
-      container.addEventListener("pointercancel", clearLongPress);
-
-      container.addEventListener("click", (e) => {
-        const btn = e.target.closest(".chip");
-        if(!btn) return;
-        if(longPressFired || btn.dataset.longpress === "1"){
-          longPressFired = false;
-          btn.dataset.longpress = "";
-          return;
-        }
-        const dateKey = yyyyMmDd(getCurrentDate());
-        const currentSegmentId = getCurrentSegmentId();
-        if(!currentSegmentId) return;
-
-        if(btn.dataset.add === "1"){
-          const label = btn.dataset.label;
-          if(!label) return;
-          captureUndo("Item added", () => {
-            const entry = actions.addRosterItem(category, label);
-            if(entry && entry.id){
-              actions.toggleSegmentItem(dateKey, currentSegmentId, category, entry.id);
-            }
-          });
-          rosterSearch[category] = "";
-          const input = searchInputs[category];
-          if(input) input.value = "";
-          openSegment(dateKey, currentSegmentId);
-          renderSettings();
-          return;
-        }
-
-        const item = btn.dataset.item;
-        if(!item) return;
-        captureUndo("Segment updated", () => actions.toggleSegmentItem(dateKey, currentSegmentId, category, item));
-        // quick UI update
-        btn.classList.toggle("active");
-        refreshSegmentStatus(dateKey, currentSegmentId);
-        updateSegmentVisual(dateKey, currentSegmentId);
-        updateSheetHints(dateKey, currentSegmentId);
-      });
-    };
-
-    wireChipContainer(els.chipsProteins, "proteins");
-    wireChipContainer(els.chipsCarbs, "carbs");
-    wireChipContainer(els.chipsFats, "fats");
-    wireChipContainer(els.chipsMicros, "micros");
-
-    // sheet add item
-    const addFromSheet = (category) => {
-      const name = prompt(`Add ${category} item:`);
-      if(!name) return;
-
-      captureUndo("Item added", () => actions.addRosterItem(category, name));
-
-      // refresh sheet chips
-      const dateKey = yyyyMmDd(getCurrentDate());
-      if(getCurrentSegmentId()){
-        openSegment(dateKey, getCurrentSegmentId());
+    wireSegmentEditor({
+      els,
+      actions,
+      getCurrentDate,
+      getCurrentSegmentId,
+      openSegment,
+      closeSegment,
+      refreshSegmentStatus,
+      updateSegmentVisual,
+      updateSheetHints,
+      setSegmentedActive,
+      getRosterSearch: () => rosterSearch,
+      setRosterSearch: (next) => { rosterSearch = next; },
+      searchInputs,
+      captureUndo,
+      markViewDirty,
+      queueRender,
+      yyyyMmDd,
+      setSegNotesTimer: (fn, delay) => {
+        clearTimeout(segNotesTimer);
+        segNotesTimer = setTimeout(fn, delay);
       }
-      renderSettings();
-      renderToday();
-    };
-
-    els.addProtein.addEventListener("click", () => addFromSheet("proteins"));
-    els.addCarb.addEventListener("click", () => addFromSheet("carbs"));
-    els.addFat.addEventListener("click", () => addFromSheet("fats"));
-    els.addMicro.addEventListener("click", () => addFromSheet("micros"));
-
-    // sheet collision (tri-state)
-    els.segCollision.addEventListener("click", (e) => {
-      const btn = e.target.closest(".seg-btn");
-      const currentSegmentId = getCurrentSegmentId();
-      if(!btn || !currentSegmentId) return;
-      const dateKey = yyyyMmDd(getCurrentDate());
-      const val = btn.dataset.value;
-      setSegmentedActive(els.segCollision, val);
-      captureUndo("Collision updated", () => actions.setSegmentField(dateKey, currentSegmentId, "collision", val));
-      refreshSegmentStatus(dateKey, currentSegmentId);
-      updateSegmentVisual(dateKey, currentSegmentId);
-      updateSheetHints(dateKey, currentSegmentId);
-    });
-
-    // sheet high-fat meal (tri-state)
-    els.segHighFat.addEventListener("click", (e) => {
-      const btn = e.target.closest(".seg-btn");
-      const currentSegmentId = getCurrentSegmentId();
-      if(!btn || !currentSegmentId) return;
-      const dateKey = yyyyMmDd(getCurrentDate());
-      const val = btn.dataset.value;
-      setSegmentedActive(els.segHighFat, val);
-      captureUndo("High-fat updated", () => actions.setSegmentField(dateKey, currentSegmentId, "highFatMeal", val));
-      refreshSegmentStatus(dateKey, currentSegmentId);
-      updateSegmentVisual(dateKey, currentSegmentId);
-    });
-
-    // sheet seed oil segmented
-    els.segSeedOil.addEventListener("click", (e) => {
-      const btn = e.target.closest(".seg-btn");
-      const currentSegmentId = getCurrentSegmentId();
-      if(!btn || !currentSegmentId) return;
-      const dateKey = yyyyMmDd(getCurrentDate());
-      const val = btn.dataset.value;
-      setSegmentedActive(els.segSeedOil, val);
-      captureUndo("Seed oil updated", () => actions.setSegmentField(dateKey, currentSegmentId, "seedOil", val));
-      refreshSegmentStatus(dateKey, currentSegmentId);
-      updateSegmentVisual(dateKey, currentSegmentId);
-      updateSheetHints(dateKey, currentSegmentId);
-    });
-
-    // sheet status segmented
-    els.segStatus.addEventListener("click", (e) => {
-      const btn = e.target.closest(".seg-btn");
-      const currentSegmentId = getCurrentSegmentId();
-      if(!btn || !currentSegmentId) return;
-      const dateKey = yyyyMmDd(getCurrentDate());
-      const val = btn.dataset.value;
-      setSegmentedActive(els.segStatus, val);
-      captureUndo("Status updated", () => actions.setSegmentStatus(dateKey, currentSegmentId, val));
-      openSegment(dateKey, currentSegmentId);
-      updateSegmentVisual(dateKey, currentSegmentId);
-    });
-
-    // FTN mode segmented
-    els.ftnModeSeg.addEventListener("click", (e) => {
-      const btn = e.target.closest(".seg-btn");
-      if(!btn) return;
-      const dateKey = yyyyMmDd(getCurrentDate());
-      setSegmentedActive(els.ftnModeSeg, btn.dataset.value);
-      captureUndo("FTN mode updated", () => actions.setSegmentField(dateKey, "ftn", "ftnMode", btn.dataset.value));
-      refreshSegmentStatus(dateKey, "ftn");
-      updateSegmentVisual(dateKey, "ftn");
-    });
-
-    // segment notes
-    els.segNotes.addEventListener("input", () => {
-      const currentSegmentId = getCurrentSegmentId();
-      if(!currentSegmentId) return;
-      const dateKey = yyyyMmDd(getCurrentDate());
-      clearTimeout(segNotesTimer);
-      segNotesTimer = setTimeout(() => {
-        captureUndo("Segment notes updated", () => actions.setSegmentField(dateKey, currentSegmentId, "notes", els.segNotes.value || ""));
-        refreshSegmentStatus(dateKey, currentSegmentId);
-        updateSegmentVisual(dateKey, currentSegmentId);
-      }, 320);
     });
 
     if(els.undoAction){

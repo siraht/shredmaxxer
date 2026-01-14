@@ -2,6 +2,9 @@
 
 // v3 baseline app (runs immediately on import)
 import "../app.js";
+import { initShell } from "./shell.js";
+
+initShell();
 
 if("serviceWorker" in navigator){
   const swUrl = new URL("../sw.js", import.meta.url);

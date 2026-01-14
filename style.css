@@ -14,18 +14,18 @@
   src: url("assets/fonts/SpaceGrotesk.woff2") format("woff2");
 }
 @font-face{
-  font-family: "Fraunces";
+  font-family: "JetBrains Mono";
   font-style: normal;
   font-weight: 400;
   font-display: swap;
-  src: url("assets/fonts/Fraunces.woff2") format("woff2");
+  src: url("assets/fonts/JetBrainsMono.woff2") format("woff2");
 }
 @font-face{
-  font-family: "Fraunces";
+  font-family: "JetBrains Mono";
   font-style: normal;
   font-weight: 600;
   font-display: swap;
-  src: url("assets/fonts/Fraunces.woff2") format("woff2");
+  src: url("assets/fonts/JetBrainsMono.woff2") format("woff2");
 }
 
 :root{
@@ -58,7 +58,30 @@
   --skyB: #090b22;
   --skyC: #0d1238;
 
+  /* --- vNext UI tokens (mockup-aligned) --- */
+  --color-bg: #08090a;
+  --color-surface: #121416;
+  --color-panel: #1a1d21;
+  --color-border: rgba(255,255,255,.08);
+  --color-primary: #ff5100;
+  --color-primary-dim: #cc4100;
+  --color-protein: #ef476f;
+  --color-carb: #ffd166;
+  --color-fat: #06d6a0;
+  --color-micro: #63d7ff;
+  --shadow-hard: 4px 4px 0px 0px #000000;
+  --shadow-hard-sm: 2px 2px 0px 0px #000000;
+
+  --font-ui: "Space Grotesk", ui-rounded, "SF Pro Rounded", "Segoe UI Variable", "Segoe UI", system-ui, sans-serif;
+  --font-display: "Space Grotesk", ui-rounded, "SF Pro Rounded", "Segoe UI Variable", "Segoe UI", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+
   color-scheme: dark;
+}
+
+:root[data-accent="cyan"]{
+  --color-primary: #4dd9ff;
+  --color-primary-dim: #2aa6c7;
 }
 
 *{ box-sizing:border-box; }
@@ -66,7 +89,7 @@ html,body{ height:100%; }
 
 body{
   margin:0;
-  font-family: "Space Grotesk", ui-rounded, "SF Pro Rounded", "Segoe UI Variable", "Segoe UI", system-ui, sans-serif;
+  font-family: var(--font-ui);
   color: var(--text);
 
   /* time-reactive sky (variables updated by JS) */
@@ -108,7 +131,7 @@ body{
   gap: 10px;
 }
 .app-lock-title{
-  font-family: "Fraunces", ui-serif, "Iowan Old Style", "Palatino Linotype", Palatino, serif;
+  font-family: var(--font-display);
   font-size: 18px;
   color: var(--text);
 }
@@ -193,7 +216,7 @@ body{
 }
 
 .brand-title{
-  font-family: "Fraunces", ui-serif, "Iowan Old Style", "Palatino Linotype", Palatino, serif;
+  font-family: var(--font-display);
   letter-spacing: .06em;
   text-transform: uppercase;
   font-size: 14px;
@@ -223,6 +246,7 @@ body{
   letter-spacing: .02em;
   cursor:pointer;
   transition: transform .15s ease, background .15s ease, border-color .15s ease, color .15s ease;
+  position: relative;
 }
 .tab:hover{ transform: translateY(-1px); }
 .tab:active{ transform: translateY(0px) scale(.98); }
@@ -234,7 +258,32 @@ body{
     rgba(255,255,255,.05);
 }
 
+.tab-badge{
+  position: absolute;
+  top: -6px;
+  right: 6px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: var(--sun);
+  color: #0b0c12;
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 18px;
+  text-align: center;
+  box-shadow: 0 2px 6px rgba(0,0,0,.35);
+}
+
+.tab-badge[hidden]{ display: none; }
+
 /* --- Layout --- */
+.app-shell{
+  min-height: 100%;
+  display:flex;
+  flex-direction:column;
+}
+.app-shell > main{ flex: 1; }
 .wrap{
   max-width: 980px;
   margin: 0 auto;
@@ -244,6 +293,50 @@ body{
 
 .view.hidden{ display:none; }
 .privacy-blur.hidden{ display:none; }
+.scrim{
+  position: fixed;
+  inset: 0;
+  z-index: 900;
+  background: rgba(5,7,20,.6);
+  backdrop-filter: blur(10px);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity .2s ease;
+}
+.scrim.is-active{
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.brand-left{
+  display:flex;
+  align-items:center;
+  gap:12px;
+}
+.brand-status{
+  display:flex;
+  align-items:center;
+  gap:8px;
+  margin-left:auto;
+}
+
+.bottom-nav{
+  position: sticky;
+  bottom: 0;
+  z-index: 25;
+  padding: 10px 14px calc(10px + env(safe-area-inset-bottom));
+  background: linear-gradient(0deg, rgba(5,7,20,.92), rgba(5,7,20,.55));
+  border-top: 1px solid var(--hair2);
+  margin-top: auto;
+}
+.bottom-nav.tabs{
+  margin-top: 0;
+  justify-content: space-between;
+}
+.bottom-nav .tab{
+  flex: 1;
+  text-align:center;
+}
 
 .panel{
   border-radius: var(--radius);
@@ -288,10 +381,24 @@ body{
 
 .tiny{ font-size: 12px; }
 .muted{ color: var(--muted); }
+.mono{ font-family: var(--font-mono); }
 .status-error{ color: var(--bad); }
+.icon{
+  width: 1.1em;
+  height: 1.1em;
+  display: inline-block;
+  vertical-align: -0.125em;
+  color: inherit;
+  stroke: currentColor;
+  fill: none;
+}
+.icon--fill{ fill: currentColor; }
+.icon--sm{ width: .9em; height: .9em; }
+.icon--lg{ width: 1.4em; height: 1.4em; }
+.icon-sprite{ position: absolute; width: 0; height: 0; overflow: hidden; }
 
 .section-title{
-  font-family: "Fraunces", ui-serif, "Iowan Old Style", "Palatino Linotype", Palatino, serif;
+  font-family: var(--font-display);
   font-size: 14px;
   letter-spacing: .08em;
   text-transform: uppercase;
@@ -355,7 +462,7 @@ body{
   text-align:right;
 }
 .phase-label{
-  font-family: "Fraunces", ui-serif, "Iowan Old Style", "Palatino Linotype", Palatino, serif;
+  font-family: var(--font-display);
   font-size: 14px;
   letter-spacing: .05em;
 }
@@ -485,7 +592,7 @@ body{
 }
 
 .segment-title{
-  font-family: "Fraunces", ui-serif, "Iowan Old Style", "Palatino Linotype", Palatino, serif;
+  font-family: var(--font-display);
   font-size: 12px;
   letter-spacing: .08em;
   text-transform: uppercase;
@@ -658,7 +765,7 @@ body{
 }
 .ritual-title{
   margin-top: 4px;
-  font-family: "Fraunces", ui-serif, "Iowan Old Style", "Palatino Linotype", Palatino, serif;
+  font-family: var(--font-display);
   letter-spacing: .06em;
   text-transform: uppercase;
   font-size: 12px;
@@ -898,7 +1005,7 @@ body{
   gap: 4px;
 }
 .day-item .d{
-  font-family: "Fraunces", ui-serif, "Iowan Old Style", "Palatino Linotype", Palatino, serif;
+  font-family: var(--font-display);
   letter-spacing: .06em;
   text-transform: uppercase;
   font-size: 12px;
@@ -966,6 +1073,10 @@ body{
   font-size: 12px;
 }
 .snapshot-time{
+  color: var(--muted);
+  font-size: 11px;
+}
+.audit-message{
   color: var(--muted);
   font-size: 11px;
 }
@@ -1097,7 +1208,7 @@ body{
 .matrix-row[data-date]{ cursor:pointer; }
 .matrix-row[data-date]:hover{ border-color: rgba(99,215,255,.22); }
 .matrix-date{
-  font-family: "Fraunces", ui-serif, "Iowan Old Style", "Palatino Linotype", Palatino, serif;
+  font-family: var(--font-display);
   font-size: 12px;
   letter-spacing: .04em;
   text-transform: uppercase;
@@ -1189,7 +1300,7 @@ body{
   gap: 10px;
 }
 .roster-title{
-  font-family: "Fraunces", ui-serif, "Iowan Old Style", "Palatino Linotype", Palatino, serif;
+  font-family: var(--font-display);
   letter-spacing: .06em;
   text-transform: uppercase;
   font-size: 12px;
@@ -1326,7 +1437,7 @@ body{
 }
 
 .sheet-title{
-  font-family: "Fraunces", ui-serif, "Iowan Old Style", "Palatino Linotype", Palatino, serif;
+  font-family: var(--font-display);
   letter-spacing: .08em;
   text-transform: uppercase;
   font-size: 13px;
@@ -1396,7 +1507,7 @@ body{
   margin-bottom: 10px;
 }
 .block-title{
-  font-family: "Fraunces", ui-serif, "Iowan Old Style", "Palatino Linotype", Palatino, serif;
+  font-family: var(--font-display);
   letter-spacing: .06em;
   text-transform: uppercase;
   font-size: 12px;
@@ -1518,3 +1629,124 @@ body{
 }
 
 .warn-text { color: #ffdf55; font-weight: 500; }
+
+/* --- vNext component primitives (mockup-aligned) --- */
+.card{
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius2);
+  box-shadow: var(--shadow-hard-sm);
+  padding: 14px;
+}
+.card--active{
+  border-color: rgba(255,81,0,.45);
+  box-shadow: var(--shadow-hard);
+}
+.card--ghost{
+  background: transparent;
+  border-style: dashed;
+  box-shadow: none;
+}
+
+.pill{
+  display:inline-flex;
+  align-items:center;
+  gap: 6px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  background: rgba(255,255,255,.06);
+  border: 1px solid var(--color-border);
+}
+.pill--status{
+  color: var(--color-primary);
+  background: rgba(255,81,0,.12);
+  border-color: rgba(255,81,0,.35);
+}
+.pill--warn{
+  color: #ffdf55;
+  background: rgba(255,223,85,.12);
+  border-color: rgba(255,223,85,.35);
+}
+
+.chip--selected{
+  border-color: rgba(255,81,0,.45);
+  background:
+    radial-gradient(circle at 30% 20%, rgba(255,81,0,.18), transparent 55%),
+    rgba(255,255,255,.04);
+}
+.chip--archived{
+  opacity:.5;
+  text-decoration: line-through;
+}
+
+.sheet__header{
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--color-border);
+}
+.sheet__body{
+  padding: 14px 16px;
+  display:flex;
+  flex-direction:column;
+  gap: 12px;
+}
+.sheet__footer{
+  padding: 14px 16px;
+  border-top: 1px solid var(--color-border);
+}
+
+.tri{
+  display:inline-flex;
+  gap: 6px;
+  flex-wrap:wrap;
+}
+.tri button{
+  border-radius: 999px;
+  border: 1px solid rgba(255,255,255,.12);
+  background: rgba(255,255,255,.03);
+  color: var(--text);
+  padding: 8px 12px;
+  cursor:pointer;
+  font-size: 12px;
+}
+.tri button.is-active{
+  border-color: rgba(255,81,0,.45);
+  background:
+    radial-gradient(circle at 30% 20%, rgba(255,81,0,.18), transparent 55%),
+    rgba(255,255,255,.03);
+}
+
+.grid-bg{
+  background-image:
+    linear-gradient(rgba(255,255,255,.04) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,.04) 1px, transparent 1px);
+  background-size: 24px 24px;
+}
+.noise{
+  pointer-events:none;
+  opacity:.18;
+  mix-blend-mode: overlay;
+  background-image: radial-gradient(rgba(255,255,255,.10) 1px, transparent 1px);
+  background-size: 3px 3px;
+}
+.scanlines{
+  pointer-events:none;
+  opacity:.08;
+  background-image: linear-gradient(rgba(255,255,255,.12) 1px, transparent 1px);
+  background-size: 100% 3px;
+}
+
+body[data-reduce-effects="true"] .grid-bg,
+body[data-reduce-effects="true"] .noise,
+body[data-reduce-effects="true"] .scanlines,
+body[data-reduce-effects="true"] .sky-noise{
+  background-image: none;
+}
+body[data-reduce-effects="true"] .noise,
+body[data-reduce-effects="true"] .scanlines,
+body[data-reduce-effects="true"] .sky-noise{
+  display:none;
+}
+body[data-reduce-effects="true"] .scrim{
+  backdrop-filter: none;
+}
