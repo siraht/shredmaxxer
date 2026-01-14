@@ -286,7 +286,7 @@ Proposed revision (pick one):
 **Option A (remote-only)**  
 \"Hosted storage only: data is stored on the app host and is not persisted locally except transient runtime state.\"
 
-### Spec section updates (Solar Log v4 Implementation.md)
+### Spec section updates (spec_v5.md)
 Suggested changes (high-level headings):
 1) **1.4 Privacy posture**  
 Add: \"Optional hosted sync (same-origin) with client-side encryption and explicit opt-in.\"
@@ -371,5 +371,5 @@ This assumes **Option B (hybrid local cache + hosted sync)**. If Option A is cho
   - Add cross-device sync test using two browser contexts.
 
 ### 8) Docs
-- Update `Solar Log v4 Implementation.md` and `README.md` once invariants are approved.
+- Update `spec_v5.md` and `README.md` once invariants are approved.
 - Add `docs/hosted-sync-setup.md` with deployment instructions.

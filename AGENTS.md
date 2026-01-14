@@ -1,4 +1,4 @@
-# AGENTS.md — Solar Log v4 (Local‑First PWA)
+# AGENTS.md — Solar Log v4 (Hosted‑Sync‑First PWA)
 
 ## RULE 1 – ABSOLUTE (DO NOT EVER VIOLATE THIS)
 
@@ -37,10 +37,10 @@ If that audit trail is missing, then you must act as if the operation never happ
 
 ## Project Definition (Source of Truth)
 
-This repo is **Solar Log v4**, a local‑first PWA for segmented‑day protocol adherence and food‑variety tracking.
+This repo is **Solar Log v4**, a hosted‑sync‑first PWA with an offline‑first cache for segmented‑day protocol adherence and food‑variety tracking.
 
 **Canonical spec:**
-- `Solar Log v4 Implementation.md`
+- `docs/spec_vNext.md`
 
 When implementing or editing anything, align to that spec and treat its invariants as hard requirements.
 
@@ -50,14 +50,26 @@ When implementing or editing anything, align to that spec and treat its invarian
 
 These are first‑class system rules and must be enforced in any code, docs, or workflows you add:
 
-- **Local‑first, no backend:** data stays on‑device unless the user explicitly exports it.
+- **Hosted‑sync‑first (same‑origin):** durable replication uses `/api/sync/v1/*` by default; the UI always reads/writes the local cache first so logging stays instant and fully offline.
 - **No build chain:** Vanilla HTML/CSS/JS with ES Modules; no bundler or framework.
 - **Speed rule:** primary logging flow must be doable in ≤10 seconds.
 - **Protocol day time model:** wrap‑around dayStart/dayEnd with correct activeDay resolution after midnight.
-- **Durable storage:** IndexedDB‑first with fallback; snapshots before import/migration.
+- **Durable replication:** hosted sync + IndexedDB cache + persistent outbox; snapshots before import/migration/sync‑reset.
 - **Stable identity:** roster items are ID‑based with tags, aliases, pinned, archived.
 - **Explainable logic:** computed flags and insights must be traceable to tags/selections.
 - **Non‑goals stay non‑goals:** no calorie/macro tracking, no body metrics, no heavy nutrition detail.
+- **Export hygiene:** plain JSON exports must exclude sync credentials/passphrases.
+
+### Hosted Sync Requirements (Spec‑Aligned)
+
+These are mandatory behaviors for hosted sync:
+
+- **Offline‑first cache:** writes commit to IndexedDB first; UI never blocks on network.
+- **Outbox replication:** queued writes drain in background with exponential backoff + jitter; failures never block logging.
+- **Sync API contract:** same‑origin `/api/sync/v1/*` with `Cache-Control: no-store`, `ETag/If-Match` concurrency, and `Idempotency-Key` on writes.
+- **Merge ordering:** prefer higher `hlc`; fall back to `(rev, tsLast)`; final tie‑break by `actor` lexicographic.
+- **Single‑tab leadership:** use `BroadcastChannel` to avoid multi‑tab sync races.
+- **Optional E2EE:** if enabled, hosted sync stores ciphertext only (AES‑GCM + PBKDF2); bind ciphertext to `{spaceId, key}` as AEAD AAD.
 
 ---
 
@@ -66,10 +78,28 @@ These are first‑class system rules and must be enforced in any code, docs, or 
 Do not remove or weaken these requirements on the MVP path:
 
 - Protocol day time model (wrap‑around + activeDay + DST clamp)
-- IndexedDB‑first persistence with fallback
+- Hosted sync by default (same‑origin) with IndexedDB offline cache + localStorage fallback
+- Outbox replication (never blocks logging) + merge‑safe pull/merge/push
+- HLC/actor merge ordering with legacy fallback (`rev`, `tsLast`)
 - Roster ID migration (strings → items) with tags and stable IDs
-- Import merge + snapshots (pre‑import / pre‑migration)
+- Import merge + snapshots (pre‑import / pre‑migration / pre‑sync)
 - Weekly Review 2.0 (coverage matrix + rotation picks)
+
+---
+
+## Hosted Sync Spec Coverage (Must Stay Aligned)
+
+Ensure these spec elements are reflected in code + docs:
+
+- **Sync UI (Settings):** status (Idle/Syncing/Offline/Error), Sync now, Copy/Paste Sync Link, Reset sync space, optional E2EE toggle, advanced pause + endpoint override.
+- **Diagnostics:** show sync status in addition to storage mode + persist status.
+- **Sync link:** includes `spaceId` + `authToken` (and optional E2EE hint); credentials stored locally only.
+- **Data model additions:** `hlc` + `actor` on segment/day; `Settings.sync` (mode/endpoint/spaceId/encryption/pushDebounceMs/pullOnBoot); `Meta.sync` status fields; `InsightsState` (dismissals); Snapshot label includes **Pre-sync**.
+- **Storage adapter:** add `saveInsights` and `deleteSnapshot`.
+- **IndexedDB stores:** add `sync_credentials` (not exported), `insights`, and `outbox` stores alongside meta/settings/rosters/logs/snapshots.
+- **Import/merge:** order by `hlc` first, fallback to `(rev, tsLast)` for legacy.
+- **Exports:** plain JSON excludes sync credentials and any E2EE passphrase.
+- **Sync API:** `/api/sync/v1/index`, `/item/:key`, `/batch`, optional `/create`; `Cache-Control: no-store`, `ETag/If-Match`, `Idempotency-Key`.
 
 ---
 
@@ -77,7 +107,7 @@ Do not remove or weaken these requirements on the MVP path:
 
 - **Primary:** make logging feel like “tapping a ritual” rather than “doing admin.”
 - **Secondary:** support variety, reduce HFHC collisions, track seed oils, and improve adherence without friction.
-- **Privacy posture:** local‑only by default; optional hardening (app lock, privacy blur, encrypted export).
+- **Privacy posture:** hosted sync by default with an offline cache; optional hardening (app lock, privacy blur, encrypted export, optional E2EE for sync).
 - **Delight:** recents, pinned items, undo/repeat, and a solar‑arc timeline that reflects the protocol day.
 
 ---
@@ -86,9 +116,9 @@ Do not remove or weaken these requirements on the MVP path:
 
 - **Runtime:** Vanilla browser JS (no Node build step)
 - **UI:** HTML/CSS, ES Modules, `// @ts-check` + JSDoc
-- **Storage:** IndexedDB primary, localStorage fallback
+- **Storage:** Hosted sync (same‑origin) + IndexedDB offline cache + localStorage fallback
 - **PWA:** Service worker app‑shell cache + manifest
-- **Crypto:** WebCrypto AES‑GCM for encrypted export (optional)
+- **Crypto:** WebCrypto AES‑GCM for encrypted export; optional E2EE for hosted sync
 
 If a different stack is chosen, document the swap explicitly and keep invariants unchanged.
 
@@ -101,7 +131,8 @@ Current repo includes a v3 prototype plus v4 scaffolding. Align new code to thes
 ```
 /shredmaxxer
 ├── AGENTS.md
-├── Solar Log v4 Implementation.md   # Canonical spec
+├── docs/spec_vNext.md               # Canonical spec
+├── spec_v5.md                       # Superseded spec (historical)
 ├── index.html                        # Prototype UI shell (v3)
 ├── app.js                            # Prototype logic (v3)
 ├── style.css                         # Prototype styling
@@ -156,9 +187,9 @@ We optimize for clarity and maintainability over long‑term backward compatibil
 
 ---
 
-## Tooling Notes (Local‑First PWA)
+## Tooling Notes (Hosted‑Sync PWA)
 
-- Use `python3 -m http.server` for local serving when needed.
+- Use `python3 -m http.server` for local serving when needed (sync API will be unavailable; app should fall back to local‑only mode).
 - No package manager is required unless adding tools; if that changes, document it here.
 - Testing tooling decision: Playwright is preferred for e2e and browser-only unit tests (npm dev-only).
 - Prefer `rg` for search.

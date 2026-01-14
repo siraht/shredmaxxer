@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<!--
+  DESIGN REFERENCE ONLY — do not ship.
+  Source: /stitchMockup/solar_log_home_screen/home.html
+  Notes: Mockup includes CDN Tailwind/Google Fonts/Material Symbols.
+  Production must use local assets and component classes.
+-->
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Solar Log v4</title>
+<!-- Fonts -->
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&amp;family=Space+Grotesk:wght@300;400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<!-- Tailwind CSS -->
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "primary": "#FF5100",
+                        "primary-dim": "#cc4100",
+                        "bg-dark": "#08090A",
+                        "surface": "#121416",
+                        "surface-highlight": "#1a1d21",
+                        "accent-protein": "#EF476F",
+                        "accent-carb": "#FFD166",
+                        "accent-fat": "#06D6A0",
+                        "grid-line": "rgba(255, 255, 255, 0.05)",
+                    },
+                    fontFamily: {
+                        "display": ["Space Grotesk", "sans-serif"],
+                        "mono": ["JetBrains Mono", "monospace"],
+                    },
+                    boxShadow: {
+                        'hard': '4px 4px 0px 0px #000000',
+                        'hard-sm': '2px 2px 0px 0px #000000',
+                    },
+                    backgroundImage: {
+                        'noise': "url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI0MDAiIGhlaWdodD0iNDAwIj48ZmlsdGVyIGlkPSJnoiPjxmZVR1cmJ1bGVuY2UgdHlwZT0iZnJhY3RhbE5vaXNlIiBiYXNlRnJlcXVlbmN5PSIwLjY1IiBudW1PY3RhdmVzPSIzIiBzdGl0Y2hUaWxlcz0ic3RpdGNoIi8+PC9maWx0ZXI+PHJlY3Qgd2lkdGg9IjEwMCUiIGhlaWdodD0iMTAwJSIgZmlsdGVyPSJ1cmwoI2cpIiBvcGFjaXR5PSIwLjAzIi8+PC9zdmc+')",
+                    },
+                    animation: {
+                        'pulse-border': 'pulse-border 2s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+                        'scan': 'scan 4s linear infinite',
+                    },
+                    keyframes: {
+                        'pulse-border': {
+                            '0%, 100%': { borderColor: '#FF5100', boxShadow: '0 0 0 0 rgba(255, 81, 0, 0.4)' },
+                            '50%': { borderColor: '#FF854D', boxShadow: '0 0 10px 0 rgba(255, 81, 0, 0.2)' },
+                        },
+                        'scan': {
+                            '0%': { backgroundPosition: '0% 0%' },
+                            '100%': { backgroundPosition: '100% 100%' },
+                        }
+                    }
+                },
+            },
+        }
+    </script>
+<style>
+        body {
+            background-color: #08090A;
+            background-image: 
+                linear-gradient(rgba(255, 255, 255, 0.03) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
+            background-size: 40px 40px;
+        }
+        
+        .grid-bg {
+            background-image: 
+                linear-gradient(rgba(255, 255, 255, 0.03) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
+            background-size: 20px 20px;
+        }
+
+        .clip-corner-br {
+            clip-path: polygon(100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%, 0 0);
+        }
+
+        /* Custom scrollbar for data chips */
+        .no-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+        .no-scrollbar {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="text-white font-display antialiased min-h-screen flex flex-col overflow-x-hidden selection:bg-primary selection:text-white">
+<!-- Top Status Bar -->
+<header class="flex items-center justify-between px-5 py-3 border-b border-white/10 bg-bg-dark/80 backdrop-blur-md sticky top-0 z-50">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-primary" style="font-size: 20px;">wb_sunny</span>
+<h1 class="font-bold tracking-tight text-lg">SOLAR LOG <span class="text-white/40 font-mono text-xs ml-1">v4.0</span></h1>
+</div>
+<div class="flex items-center gap-3 font-mono text-xs text-primary">
+<div class="flex items-center gap-1">
+<span>NET:ON</span>
+<span class="material-symbols-outlined" style="font-size: 14px;">wifi</span>
+</div>
+<div class="flex items-center gap-1">
+<span>98%</span>
+<span class="material-symbols-outlined" style="font-size: 14px;">battery_full</span>
+</div>
+</div>
+</header>
+<!-- Main Content Area -->
+<main class="flex-1 flex flex-col p-4 gap-6 max-w-md mx-auto w-full pb-24">
+<!-- Solar Arc Hero Section -->
+<section class="relative pt-6 pb-2">
+<!-- Arc Visualization -->
+<div class="h-32 w-full relative overflow-hidden">
+<!-- Grid decoration inside arc area -->
+<div class="absolute inset-0 opacity-20" style="background-image: radial-gradient(#333 1px, transparent 1px); background-size: 10px 10px;"></div>
+<!-- The Arc Path -->
+<div class="absolute bottom-0 left-0 right-0 h-48 border-t border-l border-r border-dashed border-white/20 rounded-t-full"></div>
+<!-- Sun Cursor Positioned (simulated 45 deg) -->
+<div class="absolute bottom-[40%] left-[25%] -translate-x-1/2 translate-y-1/2 z-10 flex flex-col items-center gap-1 group">
+<div class="size-4 bg-primary rounded-sm shadow-[0_0_15px_rgba(255,81,0,0.8)] animate-pulse relative">
+<div class="absolute -inset-1 border border-primary/50 rounded-sm"></div>
+</div>
+<div class="h-16 w-[1px] bg-gradient-to-b from-primary/50 to-transparent"></div>
+</div>
+<!-- Labels -->
+<div class="absolute top-0 right-0 text-right">
+<div class="font-mono text-xs text-white/50">SOLAR ELEVATION</div>
+<div class="font-mono text-xl font-bold text-primary">45°</div>
+</div>
+<div class="absolute bottom-0 left-0 font-mono text-xs text-white/30">DAWN<br/>06:00</div>
+<div class="absolute bottom-0 right-0 font-mono text-xs text-white/30 text-right">DUSK<br/>18:00</div>
+</div>
+<!-- Current Time Digital Display -->
+<div class="mt-4 flex items-baseline justify-between border-b border-white/10 pb-4">
+<div class="flex flex-col">
+<span class="font-mono text-xs text-primary tracking-wider mb-1">CURRENT_TIME</span>
+<span class="text-5xl font-bold tracking-tighter tabular-nums font-mono leading-none">12:45<span class="text-lg text-white/50 align-top ml-1">PM</span></span>
+</div>
+<div class="text-right flex flex-col items-end">
+<span class="inline-flex items-center gap-1 px-2 py-1 bg-surface-highlight border border-white/10 text-[10px] font-mono font-bold text-white/70 rounded-[2px] mb-1">
+<span class="size-1.5 bg-green-500 rounded-full animate-pulse"></span>
+                        SYNCED
+                    </span>
+<span class="font-mono text-xs text-white/50">UTC-5</span>
+</div>
+</div>
+</section>
+<!-- Segment Deck -->
+<section class="flex flex-col gap-4">
+<!-- Past Card: FTN -->
+<div class="relative group">
+<div class="absolute left-[-12px] top-1/2 -translate-y-1/2 w-[1px] h-full bg-white/10 flex flex-col justify-between py-2 items-center">
+<div class="size-1 bg-white/20"></div>
+<div class="size-1 bg-white/20"></div>
+</div>
+<div class="bg-surface border border-white/10 p-4 shadow-hard opacity-60 hover:opacity-100 transition-opacity">
+<div class="flex justify-between items-start mb-2">
+<div class="flex flex-col">
+<span class="font-mono text-[10px] text-white/40 mb-1">08:00 - 09:00</span>
+<h3 class="text-xl font-bold tracking-tight text-white/70">FTN</h3>
+</div>
+<span class="font-mono text-xs border border-white/20 px-1.5 py-0.5 text-white/50">COMPLETE</span>
+</div>
+<div class="flex items-center gap-4 border-t border-white/5 pt-2 mt-1">
+<div class="font-mono text-xs text-white/40">400 KCAL</div>
+<div class="flex-1 h-1 bg-white/5 overflow-hidden">
+<div class="h-full bg-white/30 w-full"></div>
+</div>
+</div>
+</div>
+</div>
+<!-- Active Card: LUNCH -->
+<div class="relative">
+<!-- Timeline Connector -->
+<div class="absolute left-[-12px] top-0 bottom-0 w-[1px] bg-primary/30 flex flex-col justify-center items-center">
+<div class="h-full w-[2px] bg-primary/20"></div>
+<div class="absolute top-1/2 -translate-y-1/2 size-2 bg-primary rotate-45"></div>
+</div>
+<div class="bg-surface-highlight border-2 border-primary shadow-[0_0_20px_rgba(255,81,0,0.15)] p-0 clip-corner-br animate-pulse-border relative overflow-hidden">
+<!-- Scanline effect overlay -->
+<div class="absolute inset-0 bg-noise opacity-10 pointer-events-none mix-blend-overlay"></div>
+<div class="absolute inset-0 bg-gradient-to-b from-primary/5 to-transparent pointer-events-none"></div>
+<!-- Header -->
+<div class="p-4 pb-2 flex justify-between items-start relative z-10">
+<div class="flex flex-col">
+<div class="flex items-center gap-2 mb-1">
+<span class="font-mono text-[10px] text-primary bg-primary/10 px-1 border border-primary/20 animate-pulse">LIVE WINDOW</span>
+<span class="font-mono text-[10px] text-white/40">12:00 - 13:30</span>
+</div>
+<h3 class="text-3xl font-bold tracking-tight text-white drop-shadow-md">LUNCH</h3>
+</div>
+<div class="size-8 flex items-center justify-center border border-primary/30 bg-primary/10 text-primary">
+<span class="material-symbols-outlined">restaurant</span>
+</div>
+</div>
+<!-- Macro Gauges (Industrial Style) -->
+<div class="px-4 py-3 grid grid-cols-3 gap-2 border-t border-dashed border-white/10 relative z-10">
+<!-- Protein -->
+<div class="flex flex-col gap-1">
+<div class="flex justify-between text-[10px] font-mono text-white/60"><span>PRO</span><span class="text-accent-protein">32g</span></div>
+<div class="h-2 bg-black/50 border border-white/10 relative overflow-hidden skew-x-[-10deg]">
+<div class="absolute inset-y-0 left-0 bg-accent-protein w-[70%] border-r border-black/50"></div>
+<div class="absolute inset-0 bg-[url('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAQAAAAECAYAAACp8Z5+AAAAIklEQVQIW2NkQAKrVq36zwjjgzjIHFBmkAApxoQuhg0hqwIAw4IOM4yT8hQAAAAASUVORK5CYII=')] opacity-30"></div>
+</div>
+</div>
+<!-- Carbs -->
+<div class="flex flex-col gap-1">
+<div class="flex justify-between text-[10px] font-mono text-white/60"><span>CRB</span><span class="text-accent-carb">45g</span></div>
+<div class="h-2 bg-black/50 border border-white/10 relative overflow-hidden skew-x-[-10deg]">
+<div class="absolute inset-y-0 left-0 bg-accent-carb w-[40%] border-r border-black/50"></div>
+<div class="absolute inset-0 bg-[url('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAQAAAAECAYAAACp8Z5+AAAAIklEQVQIW2NkQAKrVq36zwjjgzjIHFBmkAApxoQuhg0hqwIAw4IOM4yT8hQAAAAASUVORK5CYII=')] opacity-30"></div>
+</div>
+</div>
+<!-- Fat -->
+<div class="flex flex-col gap-1">
+<div class="flex justify-between text-[10px] font-mono text-white/60"><span>FAT</span><span class="text-accent-fat">12g</span></div>
+<div class="h-2 bg-black/50 border border-white/10 relative overflow-hidden skew-x-[-10deg]">
+<div class="absolute inset-y-0 left-0 bg-accent-fat w-[25%] border-r border-black/50"></div>
+<div class="absolute inset-0 bg-[url('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAQAAAAECAYAAACp8Z5+AAAAIklEQVQIW2NkQAKrVq36zwjjgzjIHFBmkAApxoQuhg0hqwIAw4IOM4yT8hQAAAAASUVORK5CYII=')] opacity-30"></div>
+</div>
+</div>
+</div>
+<!-- Logged Items (Chips) -->
+<div class="p-4 pt-2 bg-black/20 border-t border-white/5 relative z-10">
+<div class="text-[10px] font-mono text-white/30 mb-2 uppercase tracking-widest">Logged Data Stream</div>
+<div class="flex flex-wrap gap-2">
+<div class="flex items-center gap-2 bg-[#2a2522] border border-primary/30 px-2 py-1.5 shadow-sm hover:border-primary cursor-pointer transition-colors group/chip">
+<span class="material-symbols-outlined text-primary text-[14px]">check</span>
+<span class="text-xs font-mono text-white font-medium">BEEF</span>
+<span class="text-[10px] text-white/40 ml-1 group-hover/chip:text-primary">150g</span>
+</div>
+<div class="flex items-center gap-2 bg-[#2a2522] border border-primary/30 px-2 py-1.5 shadow-sm hover:border-primary cursor-pointer transition-colors group/chip">
+<span class="material-symbols-outlined text-primary text-[14px]">check</span>
+<span class="text-xs font-mono text-white font-medium">RICE</span>
+<span class="text-[10px] text-white/40 ml-1 group-hover/chip:text-primary">200g</span>
+</div>
+<div class="flex items-center gap-2 bg-[#2a2522] border border-primary/30 px-2 py-1.5 shadow-sm hover:border-primary cursor-pointer transition-colors group/chip">
+<span class="material-symbols-outlined text-primary text-[14px]">check</span>
+<span class="text-xs font-mono text-white font-medium">BUTTER</span>
+</div>
+<div class="flex items-center gap-2 bg-[#2a2522] border border-primary/30 px-2 py-1.5 shadow-sm hover:border-primary cursor-pointer transition-colors group/chip">
+<span class="material-symbols-outlined text-primary text-[14px]">check</span>
+<span class="text-xs font-mono text-white font-medium">GARLIC</span>
+</div>
+<!-- Add Button -->
+<button class="flex items-center justify-center size-8 bg-primary text-black border border-primary hover:bg-white transition-colors shadow-hard-sm">
+<span class="material-symbols-outlined font-bold">add</span>
+</button>
+</div>
+</div>
+</div>
+</div>
+<!-- Future Card: DINNER -->
+<div class="relative group mt-2">
+<div class="absolute left-[-12px] top-1/2 -translate-y-1/2 w-[1px] h-full bg-white/10 flex flex-col justify-between py-2 items-center">
+<div class="size-1 bg-white/20"></div>
+<div class="size-1 bg-white/20"></div>
+</div>
+<div class="bg-transparent border border-white/10 p-4 border-dashed opacity-50 hover:opacity-80 transition-opacity">
+<div class="flex justify-between items-start">
+<div class="flex flex-col">
+<span class="font-mono text-[10px] text-white/40 mb-1">18:00 - 19:30</span>
+<h3 class="text-xl font-bold tracking-tight text-white/60">DINNER</h3>
+</div>
+<span class="font-mono text-xs text-white/30 bg-white/5 px-1.5 py-0.5">SCHEDULED</span>
+</div>
+<div class="mt-4 flex items-center justify-center py-4 border border-white/5 bg-white/5">
+<span class="font-mono text-xs text-white/30 tracking-widest">NO DATA LOGGED</span>
+</div>
+</div>
+</div>
+</section>
+</main>
+<!-- Floating Action Button (Alternative placement per prompt "near bottom right") -->
+<div class="fixed bottom-24 right-6 z-40">
+<button class="size-14 bg-primary text-black flex items-center justify-center rounded-[2px] shadow-hard hover:translate-y-1 hover:shadow-none transition-all border border-black group">
+<span class="material-symbols-outlined" style="font-size: 28px;">edit_note</span>
+</button>
+</div>
+<!-- Bottom Navigation Bar -->
+<nav class="fixed bottom-0 w-full bg-[#08090A] border-t border-white/10 p-2 pb-6 z-50">
+<div class="max-w-md mx-auto flex justify-between items-center px-4">
+<button class="flex flex-col items-center gap-1 p-2 w-16 group">
+<div class="bg-primary text-bg-dark w-10 h-10 flex items-center justify-center rounded-[2px] shadow-[2px_2px_0px_#fff]">
+<span class="material-symbols-outlined">home</span>
+</div>
+<span class="text-[10px] font-mono font-bold text-primary opacity-100">HOME</span>
+</button>
+<button class="flex flex-col items-center gap-1 p-2 w-16 group">
+<div class="bg-transparent text-white/40 group-hover:text-white border border-transparent group-hover:border-white/20 w-10 h-10 flex items-center justify-center rounded-[2px] transition-all">
+<span class="material-symbols-outlined">history</span>
+</div>
+<span class="text-[10px] font-mono text-white/40 group-hover:text-white opacity-0 group-hover:opacity-100 transition-opacity">LOGS</span>
+</button>
+<button class="flex flex-col items-center gap-1 p-2 w-16 group">
+<div class="bg-transparent text-white/40 group-hover:text-white border border-transparent group-hover:border-white/20 w-10 h-10 flex items-center justify-center rounded-[2px] transition-all">
+<span class="material-symbols-outlined">monitoring</span>
+</div>
+<span class="text-[10px] font-mono text-white/40 group-hover:text-white opacity-0 group-hover:opacity-100 transition-opacity">STATS</span>
+</button>
+<button class="flex flex-col items-center gap-1 p-2 w-16 group">
+<div class="bg-transparent text-white/40 group-hover:text-white border border-transparent group-hover:border-white/20 w-10 h-10 flex items-center justify-center rounded-[2px] transition-all">
+<span class="material-symbols-outlined">settings</span>
+</div>
+<span class="text-[10px] font-mono text-white/40 group-hover:text-white opacity-0 group-hover:opacity-100 transition-opacity">CFG</span>
+</button>
+</div>
+</nav>
+</body></html>

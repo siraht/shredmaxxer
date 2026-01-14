@@ -1,10 +1,10 @@
 # Shredmaxx — Solar Log v4 (PWA)
 
-Local‑first tracker for the Shredmaxxing protocol with a segmented day model (FTN → Lunch → Dinner → Late). v4 focuses on ultra‑fast logging, durable storage, and explainable insights — all without a backend or build chain.
+Hosted‑sync‑first tracker for the Shredmaxxing protocol with a segmented day model (FTN → Lunch → Dinner → Late). v4 focuses on ultra‑fast logging, durable replication, and explainable insights — with an **offline‑first cache** and no front‑end build chain.
 
 ## Status
-- **Spec**: `Solar Log v4 Implementation.md` (source of truth).
-- **Implementation**: the PWA (`index.html`, `app.js`, `style.css`) remains a **v3 UI baseline** with **v4 core logic and storage** wired in (protocol day model, IndexedDB‑first persistence, roster IDs/tags, merge+snapshots, review/insights, privacy features).
+- **Spec**: `docs/spec_vNext.md` (source of truth).
+- **Implementation**: the PWA (`index.html`, `app.js`, `style.css`) remains a **v3 UI baseline** with **v4 core logic** wired in (protocol day model, roster IDs/tags, merge+snapshots, review/insights, privacy features, and **hosted sync by default with an IndexedDB cache**).
 
 ## What v4 tracks (fast)
 - **FTN mode**: strict / lite / off (FTN segment only)
@@ -26,12 +26,19 @@ Local‑first tracker for the Shredmaxxing protocol with a segmented day model (
 - Solar arc clamps inside the protocol day for stable rendering.
 
 ## Data, privacy, and portability (v4)
-- **IndexedDB‑first** persistence with **localStorage** fallback.
+- **Hosted sync (same-origin)** is the default durability layer (multi-device convergence).
+- **IndexedDB** is still used as an **offline-first cache** (UI reads/writes it first); `localStorage` remains a legacy fallback.
 - Attempts **persistent storage** when supported (see Diagnostics).
-- **Snapshots** before import/migration; restore from Diagnostics.
+- **Outbox replication**: offline edits queue and sync when back online (never blocks logging).
+- **Snapshots** before import/migration/sync-reset; restore from Diagnostics.
 - **Merge‑safe import** (default) + **Replace** option.
-- Exports: **JSON**, **encrypted JSON** (AES‑GCM via WebCrypto), and **CSV** (per‑day rows).
-- Optional hardening: **app lock**, **privacy blur**, **home redaction**. Encrypted exports can be imported with a passphrase.
+- Exports: **JSON** (sanitized, no sync credentials), **encrypted JSON** (AES‑GCM via WebCrypto), and **CSV** (per‑day rows).
+- Optional hardening: **app lock**, **privacy blur**, **home redaction**. Optional **E2EE** makes hosted sync ciphertext-only.
+
+## Hosted Sync (default)
+- When deployed with a write-capable same-origin server, the app syncs to `/api/sync/v1/*` in the background.
+- The UI always renders from the local cache first, so logging is instant and works offline.
+- If the sync API is unavailable (e.g., static hosting / `python -m http.server`), the app falls back to local-only mode and continues to work.
 
 ## Review (v4)
 - Weekly Review 2.0: coverage matrix, rotation picks, and local‑only correlations.
@@ -51,6 +58,7 @@ Local‑first tracker for the Shredmaxxing protocol with a segmented day model (
   manifest.webmanifest
   icons/
   assets/fonts/
+  docs/spec_vNext.md      # canonical spec (vNext)
   tests/                  # browser + e2e tests
   scripts/                # test runners
 ```
@@ -83,13 +91,14 @@ node scripts/run-e2e.mjs
 See `docs/testing-e2e-tooling.md` for setup and artifact locations.
 
 ## Manual QA checklist (v4)
-- Storage: add a segment, reload, confirm data persists; verify Diagnostics shows storage mode + persist status.
+- Storage: add a segment, reload, confirm data persists; verify Diagnostics shows storage mode + persist status + sync status.
 - Snapshots: create a snapshot, restore it, then delete it; confirm Diagnostics updates snapshot count.
 - Import/export: export JSON, import as merge, then import as replace; verify logs/rosters expected. Export encrypted, then import with passphrase.
 - CSV export: export CSV and open in a spreadsheet; verify per‑day rows render.
 - Copy yesterday: use “Copy yesterday” with a segment list and with “all”; verify overwrite confirm and undo.
 - Review: ensure weekly summary, issue chips, correlations, matrix, and rotation picks render.
 - Privacy: app lock works, blur on background works, home redaction hides labels.
+- Hosted sync: make an offline edit, then go online; verify outbox drains and sync status returns to idle.
 - Update flow: with service worker enabled, confirm update toast appears on new SW version.
 
 ## Files (current prototype)

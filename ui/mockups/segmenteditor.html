@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<!--
+  DESIGN REFERENCE ONLY — do not ship.
+  Source: /stitchMockup/lunch_segment_editor/segmenteditor.html
+  Notes: Mockup includes CDN Tailwind/Google Fonts/Material Symbols.
+  Production must use local assets and component classes.
+-->
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Solar Log v4 - Lunch Segment Editor</title>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&amp;family=JetBrains+Mono:wght@400;500;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "primary": "#ff5100",
+                        "background-light": "#f1f2f4",
+                        "background-dark": "#090a0b",
+                        "chrome-dark": "#16181A",
+                        "panel-surface": "#1E2024",
+                        "nutrient-protein": "#EF476F",
+                        "nutrient-carb": "#FFD166",
+                        "nutrient-fat": "#118AB2",
+                        "nutrient-micro": "#06D6A0",
+                    },
+                    fontFamily: {
+                        "display": ["Space Grotesk", "sans-serif"],
+                        "mono": ["JetBrains Mono", "monospace"],
+                    },
+                    borderRadius: {"DEFAULT": "0.125rem", "lg": "0.25rem", "xl": "0.5rem", "full": "0.75rem"},
+                    boxShadow: {
+                        'hard': '2px 2px 0px #000000',
+                        'hard-sm': '1px 1px 0px #000000',
+                        'inset-hard': 'inset 2px 2px 4px rgba(0,0,0,0.8)',
+                    },
+                    backgroundImage: {
+                        'noise': "url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI0IiBoZWlnaHQ9IjQiPgo8cmVjdCB3aWR0aD0iNCIgaGVpZ2h0PSI0IiBmaWxsPSIjMDAwIiBmaWxsLW9wYWNpdHk9IjAuMDUiLz4KPC9zdmc+')",
+                    }
+                },
+            },
+        }
+    </script>
+<style>/* Custom scrollbar for industrial feel */
+::-webkit-scrollbar {
+    width: 4px
+    }
+::-webkit-scrollbar-track {
+    background: #16181A
+    }
+::-webkit-scrollbar-thumb {
+    background: #333
+    }
+/* Noise overlay utility */
+.bg-noise-overlay {
+    position: relative
+    }
+.bg-noise-overlay::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-image: url(https://lh3.googleusercontent.com/aida-public/AB6AXuAOYC3gCR9l3ZoyVEpe9MvUk4t5ae4mZtaGFeRvW_uO-XTCgEyUc6-HjpMgp-WoVgPPa7iYnyEIvclQWoUduX9xav2e82VO57Jms4KzaewLLgb1p6FVib6a9df_FX_5nplAtUAVaJrqItWI-T918xz9cZw3vmzo3x67Kocow937uepNTkOQtCgjaysNGiMGR15kdntO0UTgDow3xS3aWZYOLxqBLOzMm8nGdv6wrma3-vrJqn8QyEsXfajnK0bvUUWmqkbBnGYu3fiO);
+    pointer-events: none;
+    z-index: 10
+    }
+/* CRT scanline effect for headers */
+.scanline {
+    background: linear-gradient(to bottom, rgba(255, 255, 255, 0), rgba(255, 255, 255, 0) 50%, rgba(0, 0, 0, 0.2) 50%, rgba(0, 0, 0, 0.2));
+    background-size: 100% 4px
+    }</style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-black font-display overflow-hidden select-none">
+<!-- Background Context (Simulating the app underneath) -->
+<div class="fixed inset-0 z-0 flex flex-col items-center justify-center opacity-40 blur-[2px] scale-95 pointer-events-none">
+<div class="text-[#333] text-9xl font-bold tracking-tighter opacity-20">SOLAR</div>
+<div class="text-[#333] text-9xl font-bold tracking-tighter opacity-20">LOG</div>
+</div>
+<!-- Bottom Sheet Container -->
+<div class="fixed bottom-0 left-0 w-full h-[88vh] z-50 flex flex-col bg-chrome-dark border-t-2 border-[#333] shadow-[0_-10px_40px_rgba(0,0,0,0.8)] before:absolute before:inset-0 before:bg-noise-overlay before:pointer-events-none">
+<!-- Grip Handle & Drag Indicator -->
+<div class="w-full flex justify-center py-3 bg-[#111] border-b border-[#222] relative z-20">
+<div class="flex gap-1">
+<div class="w-8 h-1 bg-[#333] skew-x-[-12deg]"></div>
+<div class="w-8 h-1 bg-[#333] skew-x-[-12deg]"></div>
+<div class="w-8 h-1 bg-[#333] skew-x-[-12deg]"></div>
+</div>
+</div>
+<!-- Header Module -->
+<div class="px-5 pt-6 pb-4 bg-chrome-dark/95 backdrop-blur-sm border-b border-[#222] relative z-20">
+<div class="flex justify-between items-end mb-2">
+<div>
+<div class="flex items-center gap-2 mb-1">
+<span class="w-2 h-2 rounded-full bg-primary animate-pulse"></span>
+<span class="text-[#555] text-xs font-mono tracking-widest uppercase">Segment 03</span>
+</div>
+<h2 class="text-white text-3xl font-bold tracking-tight leading-none">LUNCH</h2>
+</div>
+<div class="text-right">
+<p class="text-primary font-mono text-sm tracking-wider">CRITICAL WINDOW</p>
+<p class="text-[#888] font-mono text-2xl leading-none">12:00<span class="animate-pulse">:</span>00</p>
+</div>
+</div>
+<!-- Progress Bar / Visual Decor -->
+<div class="w-full h-1 bg-[#222] mt-4 flex gap-[1px]">
+<div class="h-full w-1/3 bg-primary/60"></div>
+<div class="h-full w-1/6 bg-primary/40"></div>
+<div class="h-full w-1/12 bg-primary/20"></div>
+</div>
+</div>
+<!-- Scrollable Content Area -->
+<div class="flex-1 overflow-y-auto px-4 py-6 space-y-8 relative z-10 pb-32">
+<!-- PROTEIN SECTION -->
+<section>
+<div class="flex items-center justify-between mb-3 border-b border-[#333] pb-1">
+<h3 class="text-nutrient-protein font-mono text-sm font-bold tracking-widest uppercase flex items-center gap-2">
+<span class="material-symbols-outlined text-sm">fitness_center</span>
+                        Protein // Anabolic
+                    </h3>
+<span class="text-[#444] text-[10px] font-mono">SEC-01</span>
+</div>
+<div class="grid grid-cols-4 gap-2">
+<!-- Active Item -->
+<button class="aspect-square bg-[#1a1a1a] border border-nutrient-protein shadow-inset-hard rounded-sm flex flex-col items-center justify-center p-1 group relative overflow-hidden">
+<div class="absolute inset-0 bg-nutrient-protein/10"></div>
+<span class="material-symbols-outlined text-nutrient-protein mb-1">steppers</span>
+<span class="text-nutrient-protein text-[10px] font-mono font-bold">BEEF</span>
+<div class="absolute bottom-1 right-1 w-1 h-1 bg-nutrient-protein rounded-full"></div>
+</button>
+<!-- Inactive Items -->
+<button class="aspect-square bg-[#222] border border-[#333] shadow-hard hover:translate-y-[1px] hover:shadow-hard-sm active:shadow-inset-hard active:translate-y-[2px] transition-all rounded-sm flex flex-col items-center justify-center p-1 group">
+<span class="material-symbols-outlined text-[#666] group-hover:text-[#888] mb-1">egg</span>
+<span class="text-[#666] text-[10px] font-mono group-hover:text-[#888]">EGGS</span>
+</button>
+<button class="aspect-square bg-[#222] border border-[#333] shadow-hard hover:translate-y-[1px] hover:shadow-hard-sm active:shadow-inset-hard active:translate-y-[2px] transition-all rounded-sm flex flex-col items-center justify-center p-1 group">
+<span class="material-symbols-outlined text-[#666] group-hover:text-[#888] mb-1">pest_control</span>
+<span class="text-[#666] text-[10px] font-mono group-hover:text-[#888]">LAMB</span>
+</button>
+<button class="aspect-square bg-[#222] border border-[#333] shadow-hard hover:translate-y-[1px] hover:shadow-hard-sm active:shadow-inset-hard active:translate-y-[2px] transition-all rounded-sm flex flex-col items-center justify-center p-1 group">
+<span class="material-symbols-outlined text-[#666] group-hover:text-[#888] mb-1">water_drop</span>
+<span class="text-[#666] text-[10px] font-mono group-hover:text-[#888]">WHEY</span>
+</button>
+<button class="aspect-square bg-[#222] border border-[#333] shadow-hard hover:translate-y-[1px] hover:shadow-hard-sm active:shadow-inset-hard active:translate-y-[2px] transition-all rounded-sm flex flex-col items-center justify-center p-1 group">
+<span class="material-symbols-outlined text-[#666] group-hover:text-[#888] mb-1">set_meal</span>
+<span class="text-[#666] text-[10px] font-mono group-hover:text-[#888]">FISH</span>
+</button>
+<!-- Search Item in Grid -->
+<button class="aspect-square bg-[#1a1a1a] border border-[#333] border-dashed rounded-sm flex flex-col items-center justify-center p-1 group opacity-50 hover:opacity-100 transition-opacity">
+<span class="material-symbols-outlined text-[#444] mb-1">add</span>
+<span class="text-[#444] text-[10px] font-mono">ADD</span>
+</button>
+</div>
+</section>
+<!-- CARBS SECTION -->
+<section>
+<div class="flex items-center justify-between mb-3 border-b border-[#333] pb-1">
+<h3 class="text-nutrient-carb font-mono text-sm font-bold tracking-widest uppercase flex items-center gap-2">
+<span class="material-symbols-outlined text-sm">bolt</span>
+                        Carbs // Fuel
+                    </h3>
+<span class="text-[#444] text-[10px] font-mono">SEC-02</span>
+</div>
+<div class="grid grid-cols-4 gap-2">
+<!-- Active Item -->
+<button class="aspect-square bg-[#1a1a1a] border border-nutrient-carb shadow-inset-hard rounded-sm flex flex-col items-center justify-center p-1 group relative overflow-hidden">
+<div class="absolute inset-0 bg-nutrient-carb/10"></div>
+<span class="material-symbols-outlined text-nutrient-carb mb-1">grain</span>
+<span class="text-nutrient-carb text-[10px] font-mono font-bold">RICE</span>
+<div class="absolute bottom-1 right-1 w-1 h-1 bg-nutrient-carb rounded-full"></div>
+</button>
+<button class="aspect-square bg-[#222] border border-[#333] shadow-hard hover:translate-y-[1px] hover:shadow-hard-sm active:shadow-inset-hard active:translate-y-[2px] transition-all rounded-sm flex flex-col items-center justify-center p-1 group">
+<span class="material-symbols-outlined text-[#666] group-hover:text-[#888] mb-1">hive</span>
+<span class="text-[#666] text-[10px] font-mono group-hover:text-[#888]">HONEY</span>
+</button>
+<!-- Active Item 2 -->
+<button class="aspect-square bg-[#1a1a1a] border border-nutrient-carb shadow-inset-hard rounded-sm flex flex-col items-center justify-center p-1 group relative overflow-hidden">
+<div class="absolute inset-0 bg-nutrient-carb/10"></div>
+<span class="material-symbols-outlined text-nutrient-carb mb-1">nutrition</span>
+<span class="text-nutrient-carb text-[10px] font-mono font-bold">FRUIT</span>
+<div class="absolute bottom-1 right-1 w-1 h-1 bg-nutrient-carb rounded-full"></div>
+</button>
+<button class="aspect-square bg-[#222] border border-[#333] shadow-hard hover:translate-y-[1px] hover:shadow-hard-sm active:shadow-inset-hard active:translate-y-[2px] transition-all rounded-sm flex flex-col items-center justify-center p-1 group">
+<span class="material-symbols-outlined text-[#666] group-hover:text-[#888] mb-1">eco</span>
+<span class="text-[#666] text-[10px] font-mono group-hover:text-[#888]">POTATO</span>
+</button>
+</div>
+</section>
+<!-- FATS SECTION -->
+<section>
+<div class="flex items-center justify-between mb-3 border-b border-[#333] pb-1">
+<h3 class="text-nutrient-fat font-mono text-sm font-bold tracking-widest uppercase flex items-center gap-2">
+<span class="material-symbols-outlined text-sm">water_drop</span>
+                        Fats // Hormonal
+                    </h3>
+<span class="text-[#444] text-[10px] font-mono">SEC-03</span>
+</div>
+<div class="grid grid-cols-4 gap-2">
+<button class="aspect-square bg-[#222] border border-[#333] shadow-hard hover:translate-y-[1px] hover:shadow-hard-sm active:shadow-inset-hard active:translate-y-[2px] transition-all rounded-sm flex flex-col items-center justify-center p-1 group">
+<span class="material-symbols-outlined text-[#666] group-hover:text-[#888] mb-1">icecream</span>
+<span class="text-[#666] text-[10px] font-mono group-hover:text-[#888]">BUTTER</span>
+</button>
+<!-- Active Item -->
+<button class="aspect-square bg-[#1a1a1a] border border-nutrient-fat shadow-inset-hard rounded-sm flex flex-col items-center justify-center p-1 group relative overflow-hidden">
+<div class="absolute inset-0 bg-nutrient-fat/10"></div>
+<span class="material-symbols-outlined text-nutrient-fat mb-1">science</span>
+<span class="text-nutrient-fat text-[10px] font-mono font-bold">TALLOW</span>
+<div class="absolute bottom-1 right-1 w-1 h-1 bg-nutrient-fat rounded-full"></div>
+</button>
+<button class="aspect-square bg-[#222] border border-[#333] shadow-hard hover:translate-y-[1px] hover:shadow-hard-sm active:shadow-inset-hard active:translate-y-[2px] transition-all rounded-sm flex flex-col items-center justify-center p-1 group">
+<span class="material-symbols-outlined text-[#666] group-hover:text-[#888] mb-1">local_cafe</span>
+<span class="text-[#666] text-[10px] font-mono group-hover:text-[#888]">GHEE</span>
+</button>
+</div>
+</section>
+<!-- MICRO SECTION -->
+<section>
+<div class="flex items-center justify-between mb-3 border-b border-[#333] pb-1">
+<h3 class="text-nutrient-micro font-mono text-sm font-bold tracking-widest uppercase flex items-center gap-2">
+<span class="material-symbols-outlined text-sm">grain</span>
+                        Micro // Catalyst
+                    </h3>
+<span class="text-[#444] text-[10px] font-mono">SEC-04</span>
+</div>
+<div class="grid grid-cols-4 gap-2">
+<button class="aspect-square bg-[#222] border border-[#333] shadow-hard hover:translate-y-[1px] hover:shadow-hard-sm active:shadow-inset-hard active:translate-y-[2px] transition-all rounded-sm flex flex-col items-center justify-center p-1 group">
+<span class="material-symbols-outlined text-[#666] group-hover:text-[#888] mb-1">grain</span>
+<span class="text-[#666] text-[10px] font-mono group-hover:text-[#888]">SALT</span>
+</button>
+<button class="aspect-square bg-[#222] border border-[#333] shadow-hard hover:translate-y-[1px] hover:shadow-hard-sm active:shadow-inset-hard active:translate-y-[2px] transition-all rounded-sm flex flex-col items-center justify-center p-1 group">
+<span class="material-symbols-outlined text-[#666] group-hover:text-[#888] mb-1">eco</span>
+<span class="text-[#666] text-[10px] font-mono group-hover:text-[#888]">LIME</span>
+</button>
+</div>
+</section>
+</div>
+<!-- Sticky Footer Module -->
+<div class="absolute bottom-0 left-0 w-full bg-[#111] border-t border-[#333] px-4 py-4 z-40 shadow-[0_-20px_40px_rgba(0,0,0,1)]">
+<!-- Flags Row -->
+<div class="flex justify-between items-center mb-4">
+<!-- Toggle 1 -->
+<div class="flex items-center gap-3">
+<div class="relative inline-block w-10 h-5 align-middle select-none transition duration-200 ease-in">
+<input class="toggle-checkbox absolute block w-5 h-5 rounded-full bg-[#333] border-4 border-[#111] appearance-none cursor-pointer checked:right-0 right-5 checked:bg-red-500 checked:border-red-900 transition-all duration-200" id="toggle1" name="toggle" type="checkbox"/>
+<label class="toggle-label block overflow-hidden h-5 rounded-full bg-[#222] cursor-pointer border border-[#333]" for="toggle1"></label>
+</div>
+<label class="text-xs font-mono text-gray-400 uppercase tracking-tight" for="toggle1">Avoided Seed Oils</label>
+</div>
+<!-- Toggle 2 -->
+<div class="flex items-center gap-3">
+<div class="relative inline-block w-10 h-5 align-middle select-none transition duration-200 ease-in">
+<input class="toggle-checkbox absolute block w-5 h-5 rounded-full bg-[#333] border-4 border-[#111] appearance-none cursor-pointer checked:right-0 right-5 checked:bg-yellow-500 checked:border-yellow-900 transition-all duration-200" id="toggle2" name="toggle2" type="checkbox"/>
+<label class="toggle-label block overflow-hidden h-5 rounded-full bg-[#222] cursor-pointer border border-[#333]" for="toggle2"></label>
+</div>
+<label class="text-xs font-mono text-gray-400 uppercase tracking-tight" for="toggle2">Collision</label>
+</div>
+</div>
+<!-- Search & Log Action -->
+<div class="flex gap-2">
+<div class="flex-1 bg-[#1a1a1a] border border-[#333] rounded-sm flex items-center px-3 h-12 focus-within:border-primary transition-colors group">
+<span class="material-symbols-outlined text-[#444] text-lg group-focus-within:text-primary">terminal</span>
+<input class="bg-transparent border-none text-white font-mono text-sm w-full focus:ring-0 placeholder-[#444] uppercase ml-2 caret-primary" placeholder="CMD+F / SEARCH..." type="text"/>
+</div>
+<button class="bg-primary text-black font-bold font-mono px-6 h-12 rounded-sm shadow-hard active:translate-y-[2px] active:shadow-none transition-all flex items-center gap-2 hover:bg-orange-500">
+                    LOG
+                    <span class="material-symbols-outlined text-lg">arrow_forward</span>
+</button>
+</div>
+<!-- Safe Area Bottom Spacer -->
+<div class="h-4 w-full"></div>
+</div>
+</div>
+</body></html>
