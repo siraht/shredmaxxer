@@ -489,6 +489,46 @@ function addDays(d, days){
   return addDaysLocal(d, days);
 }
 
+function dayHasSegmentData(day){
+  const segments = day?.segments || {};
+  for(const [segId, seg] of Object.entries(segments)){
+    if(segmentHasContent(seg, segId)) return true;
+    if(seg?.status === "none") return true;
+  }
+  return false;
+}
+
+function canCopyYesterday(dateKey){
+  const sourceKey = dateToKey(addDaysLocal(dateFromKey(dateKey), -1));
+  const source = state.logs[sourceKey];
+  return !!(source && dayHasSegmentData(source));
+}
+
+function copyYesterday(dateKey){
+  const sourceKey = dateToKey(addDaysLocal(dateFromKey(dateKey), -1));
+  const source = state.logs[sourceKey];
+  if(!source || !dayHasSegmentData(source)) return false;
+
+  const day = getDay(dateKey);
+  const base = createDefaultDay();
+  const sourceSegments = source.segments || {};
+  const nowIso = new Date().toISOString();
+
+  for(const segId of Object.keys(base.segments)){
+    const template = base.segments[segId];
+    const incoming = sourceSegments[segId] || {};
+    const next = { ...template, ...deepClone(incoming) };
+    if(segId !== "ftn") delete next.ftnMode;
+    syncSegmentStatus(next, segId);
+    touchSegment(next, nowIso);
+    day.segments[segId] = next;
+  }
+
+  touchDay(day, nowIso);
+  setDay(dateKey, day);
+  return true;
+}
+
 function segmentHasContent(seg, segId){
   if(!seg) return false;
   const hasItems = seg.proteins.length || seg.carbs.length || seg.fats.length || seg.micros.length;
@@ -610,6 +650,9 @@ function copySegment(dateKey, targetSegId, sourceSeg){
   if(targetSegId !== "ftn"){
     delete next.ftnMode;
   }
+  next.tsFirst = "";
+  next.tsLast = "";
+  next.rev = Number.isFinite(target.rev) ? target.rev : 0;
 
   day.segments[targetSegId] = next;
   syncSegmentStatus(next, targetSegId);
@@ -866,6 +909,8 @@ const ui = createLegacyUI({
     setSegmentStatus,
     clearSegment,
     copySegment,
+    canCopyYesterday,
+    copyYesterday,
     setDayField,
     toggleBoolField,
     addRosterItem,
