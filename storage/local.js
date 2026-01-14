@@ -6,6 +6,11 @@ const KEY_ROSTERS = "shredmaxx_v4_rosters";
 const KEY_INSIGHTS = "shredmaxx_v4_insights";
 const KEY_LOGS = "shredmaxx_v4_logs";
 const KEY_SNAPSHOTS = "shredmaxx_v4_snapshots";
+const KEY_AUDIT_LOG = "shredmaxx_v4_audit_log";
+const KEY_OUTBOX = "shredmaxx_v4_outbox";
+const KEY_SYNC_CREDENTIALS = "shredmaxx_v4_sync_credentials";
+const KEY_DAY_INDEX = "shredmaxx_v4_day_index";
+const KEY_WEEK_INDEX = "shredmaxx_v4_week_index";
 
 function hasLocalStorage(){
   return typeof localStorage !== "undefined";
@@ -65,6 +70,74 @@ export const localAdapter = {
 
   async saveMeta(meta){
     writeJson(KEY_META, meta);
+  },
+
+  async getDayIndex(dateKey){
+    const all = readJson(KEY_DAY_INDEX, {});
+    return all?.[dateKey] || null;
+  },
+
+  async saveDayIndex(dateKey, entry){
+    const all = readJson(KEY_DAY_INDEX, {});
+    all[dateKey] = entry;
+    writeJson(KEY_DAY_INDEX, all);
+  },
+
+  async listDayIndex(){
+    const all = readJson(KEY_DAY_INDEX, {});
+    return all && typeof all === "object" ? all : {};
+  },
+
+  async clearDayIndex(){
+    writeJson(KEY_DAY_INDEX, {});
+  },
+
+  async getWeekIndex(weekKey){
+    const all = readJson(KEY_WEEK_INDEX, {});
+    return all?.[weekKey] || null;
+  },
+
+  async saveWeekIndex(weekKey, entry){
+    const all = readJson(KEY_WEEK_INDEX, {});
+    all[weekKey] = entry;
+    writeJson(KEY_WEEK_INDEX, all);
+  },
+
+  async listWeekIndex(){
+    const all = readJson(KEY_WEEK_INDEX, {});
+    return all && typeof all === "object" ? all : {};
+  },
+
+  async clearWeekIndex(){
+    writeJson(KEY_WEEK_INDEX, {});
+  },
+
+  async getAuditLog(){
+    const list = readJson(KEY_AUDIT_LOG, []);
+    return Array.isArray(list) ? list : [];
+  },
+
+  async saveAuditLog(log){
+    const list = Array.isArray(log) ? log : [];
+    writeJson(KEY_AUDIT_LOG, list);
+  },
+
+  async getOutbox(){
+    const list = readJson(KEY_OUTBOX, []);
+    return Array.isArray(list) ? list : [];
+  },
+
+  async saveOutbox(list){
+    const next = Array.isArray(list) ? list : [];
+    writeJson(KEY_OUTBOX, next);
+  },
+
+  async getSyncCredentials(){
+    return readJson(KEY_SYNC_CREDENTIALS, null);
+  },
+
+  async saveSyncCredentials(creds){
+    writeJson(KEY_SYNC_CREDENTIALS, creds || null);
   },
 
   async listSnapshots(){

@@ -1,7 +1,7 @@
 // @ts-check
 
 const DB_NAME = "shredmaxx_solar_log";
-const DB_VERSION = 2;
+const DB_VERSION = 3;
 
 const STORES = {
   meta: "meta",
@@ -9,7 +9,12 @@ const STORES = {
   rosters: "rosters",
   insights: "insights",
   logs: "logs",
-  snapshots: "snapshots"
+  snapshots: "snapshots",
+  outbox: "outbox",
+  dayIndex: "day_index",
+  weekIndex: "week_index",
+  auditLog: "audit_log",
+  syncCredentials: "sync_credentials"
 };
 
 let openPromise = null;
@@ -139,6 +144,80 @@ export const idbAdapter = {
   async saveMeta(meta){
     const db = await openDatabase();
     await setSingleton(db, STORES.meta, "meta", meta);
+  },
+
+  async getDayIndex(dateKey){
+    const db = await openDatabase();
+    return getSingleton(db, STORES.dayIndex, dateKey);
+  },
+
+  async saveDayIndex(dateKey, entry){
+    const db = await openDatabase();
+    await setSingleton(db, STORES.dayIndex, dateKey, entry);
+  },
+
+  async listDayIndex(){
+    const db = await openDatabase();
+    return getAllByKey(db, STORES.dayIndex);
+  },
+
+  async clearDayIndex(){
+    const db = await openDatabase();
+    await clearStore(db, STORES.dayIndex);
+  },
+
+  async getWeekIndex(weekKey){
+    const db = await openDatabase();
+    return getSingleton(db, STORES.weekIndex, weekKey);
+  },
+
+  async saveWeekIndex(weekKey, entry){
+    const db = await openDatabase();
+    await setSingleton(db, STORES.weekIndex, weekKey, entry);
+  },
+
+  async listWeekIndex(){
+    const db = await openDatabase();
+    return getAllByKey(db, STORES.weekIndex);
+  },
+
+  async clearWeekIndex(){
+    const db = await openDatabase();
+    await clearStore(db, STORES.weekIndex);
+  },
+
+  async getAuditLog(){
+    const db = await openDatabase();
+    const log = await getSingleton(db, STORES.auditLog, "audit_log");
+    return Array.isArray(log) ? log : [];
+  },
+
+  async saveAuditLog(log){
+    const db = await openDatabase();
+    const list = Array.isArray(log) ? log : [];
+    await setSingleton(db, STORES.auditLog, "audit_log", list);
+  },
+
+  async getOutbox(){
+    const db = await openDatabase();
+    const list = await getSingleton(db, STORES.outbox, "outbox");
+    return Array.isArray(list) ? list : [];
+  },
+
+  async saveOutbox(list){
+    const db = await openDatabase();
+    const next = Array.isArray(list) ? list : [];
+    await setSingleton(db, STORES.outbox, "outbox", next);
+  },
+
+  async getSyncCredentials(){
+    const db = await openDatabase();
+    return getSingleton(db, STORES.syncCredentials, "sync_credentials");
+  },
+
+  async saveSyncCredentials(creds){
+    const db = await openDatabase();
+    await setSingleton(db, STORES.syncCredentials, "sync_credentials", creds || null);
   },
 
   async listSnapshots(){

@@ -9,10 +9,11 @@ import { getElements } from "./ui/elements.js";
 import { createLegacyUI } from "./ui/legacy.js";
 import { normalizeTri } from "./domain/heuristics.js";
 import { ensureDayMeta, ensureSegmentMeta, touchDay, touchSegment } from "./domain/revisions.js";
-import { activeDayKey, addDaysLocal, dateToKey, computeSunTimes } from "./domain/time.js";
+import { activeDayKey, addDaysLocal, clampLocalTime, dateToKey, computeSunTimes, inspectDstClamp } from "./domain/time.js";
 import { createInsightsState, mergeInsightsState, dismissInsight } from "./domain/insights.js";
 import { mergeRosters } from "./storage/merge.js";
 import { savePreImportSnapshot, saveSnapshotWithRetention } from "./storage/snapshots.js";
+import { rebuildIndexes, updateIndexesForDay } from "./storage/indexes.js";
 import { createDefaultRosters, findDefaultRosterTemplate } from "./domain/roster_defaults.js";
 import { createRosterItem, findRosterItemByLabel, normalizeLabel } from "./domain/roster.js";
 import { setRosterLabel, setRosterAliases, setRosterTags, toggleRosterPinned, toggleRosterArchived } from "./domain/roster_edit.js";
@@ -21,7 +22,12 @@ import { APP_VERSION, buildMeta } from "./storage/meta.js";
 import { serializeExport } from "./storage/export.js";
 import { buildCsvExport } from "./storage/csv_export.js";
 import { encryptExport, decryptExport } from "./storage/encrypted_export.js";
-import { storageAdapter } from "./storage/adapter.js";
+import { storageAdapter, getStorageOpenError } from "./storage/adapter.js";
+import { createSafeModeGuards } from "./app/safe_mode.js";
+import { appendAuditEvent, listAuditEvents } from "./storage/audit_log.js";
+import { createSyncEngine } from "./storage/sync_engine.js";
+import { buildSyncLink, parseSyncLink, getSyncCredentials, saveSyncCredentials, clearSyncCredentials } from "./storage/sync_credentials.js";
+import { DEFAULT_HASH, DEFAULT_ITERATIONS } from "./storage/sync_crypto.js";
 import { clearSegmentContents, createDefaultDay, mergeSettings, segmentHasContent, syncSegmentStatus } from "./app/helpers.js";
 import {
   applySegmentStatus,
@@ -37,6 +43,7 @@ import { mergeLogs, validateImportPayload } from "./app/import_logic.js";
 const STORAGE_KEY = "shredmaxx_tracker_v4";
 const LEGACY_KEY_V3 = "shredmaxx_tracker_v3";
 const LEGACY_KEY_V1 = "shredmaxx_tracker_v1";
+let integrityIssue = null;
 
 // Legacy label rosters (used only for v1/v3 migration paths).
 const LEGACY_ROSTERS = {
@@ -113,6 +120,17 @@ const DEFAULT_SETTINGS = {
   supplementsMode: "none", // "" | "none" | "essential" | "advanced"
   lastKnownLat: undefined,
   lastKnownLon: undefined,
+  sync: {
+    mode: "hosted",
+    endpoint: "/api/sync/v1",
+    encryption: "none",
+    pushDebounceMs: 1200,
+    pullOnBoot: true
+  },
+  ui: {
+    accent: "",
+    reduceEffects: false
+  },
   privacy: {
     appLock: false,
     redactHome: false,
@@ -206,7 +224,9 @@ function createDefaultState(){
     settings: deepClone(DEFAULT_SETTINGS),
     rosters: createDefaultRosters(now),
     insights: createInsightsState(),
-    logs: {}
+    logs: {},
+    dayIndex: {},
+    weekIndex: {}
   };
 }
 
@@ -235,7 +255,7 @@ function migrateFromLegacy(old){
         // carry daily toggles
         d.movedBeforeLunch = !!lg.movedBeforeLunch;
         d.trained = !!lg.trained;
-        d.highFatDay = !!lg.highFatDay;
+        d.highFatDay = normalizeTri(lg.highFatDay);
         d.energy = lg.energy || "";
         d.mood = lg.mood || "";
         d.cravings = lg.cravings || "";
@@ -270,10 +290,11 @@ async function loadState(){
   try {
     const v4State = await storageAdapter.loadState();
     if(v4State && (v4State.version === 4 || v4State.meta?.version === 4)) {
-      return hydrateState(v4State);
+      return finalizeLoadedState(hydrateState(v4State));
     }
   } catch(e) {
     console.warn("Storage adapter load failed, will try legacy localStorage", e);
+    noteIntegrityIssue("storage_open_failed", e);
   }
 
   // Fallback: check legacy localStorage keys for migration
@@ -282,17 +303,18 @@ async function loadState(){
   if(raw){
     try{
       const obj = JSON.parse(raw);
-      if(obj && obj.version === 4) return hydrateState(obj);
+      if(obj && obj.version === 4) return finalizeLoadedState(hydrateState(obj));
       if(obj && obj.version === 3){
-        return migrateV3ToV4(obj, {
+        return finalizeLoadedState(migrateV3ToV4(obj, {
           appVersion: APP_VERSION,
           storageMode: "localStorage",
           persistStatus: "unknown"
-        });
+        }));
       }
-      return migrateFromLegacy(obj);
+      return finalizeLoadedState(migrateFromLegacy(obj));
     }catch(e){
       console.warn("State parse failed", e);
+      noteIntegrityIssue("state_parse_failed", e);
     }
   }
 
@@ -309,9 +331,10 @@ async function loadState(){
         })
         : migrateFromLegacy(legacy);
       // don't delete legacy automatically; user may still be using older build
-      return migrated;
+      return finalizeLoadedState(migrated);
     }catch(e){
       console.warn("Legacy parse failed", e);
+      noteIntegrityIssue("legacy_parse_failed", e);
     }
   }
 
@@ -321,13 +344,25 @@ async function loadState(){
     try{
       const legacy = JSON.parse(legacyV1Raw);
       const migrated = migrateFromLegacy(legacy);
-      return migrated;
+      return finalizeLoadedState(migrated);
     }catch(e){
       console.warn("Legacy parse failed", e);
+      noteIntegrityIssue("legacy_parse_failed", e);
     }
   }
 
-  return createDefaultState();
+  return finalizeLoadedState(createDefaultState());
+}
+
+function finalizeLoadedState(nextState){
+  const validation = validateImportPayload(nextState);
+  if(!validation.ok){
+    const detail = Array.isArray(validation.errors) && validation.errors.length
+      ? validation.errors[0]
+      : "validation_failed";
+    noteIntegrityIssue("validation_failed", detail);
+  }
+  return nextState;
 }
 
 function hydrateState(obj){
@@ -340,15 +375,72 @@ function hydrateState(obj){
       if(Array.isArray(obj.rosters[k])) s.rosters[k] = obj.rosters[k];
     }
   }
-  if(obj.logs && typeof obj.logs === "object") s.logs = obj.logs;
+  if(obj.logs && typeof obj.logs === "object"){
+    s.logs = obj.logs;
+    for(const day of Object.values(s.logs)){
+      if(!day || typeof day !== "object") continue;
+      day.highFatDay = normalizeTri(day.highFatDay);
+    }
+  }
+  if(obj.dayIndex && typeof obj.dayIndex === "object"){
+    s.dayIndex = obj.dayIndex;
+  }
+  if(obj.weekIndex && typeof obj.weekIndex === "object"){
+    s.weekIndex = obj.weekIndex;
+  }
   s.version = 4;
   return s;
 }
 
 let state = createDefaultState();
+let syncEngine = null;
+
+function canSync(){
+  return !isSafeMode() && state.settings?.sync?.mode === "hosted";
+}
+
+function updateSyncMeta(patch){
+  const next = { ...(state.meta.sync || {}), ...(patch || {}) };
+  state.meta.sync = next;
+  persistMeta().catch((e) => console.error("Persist meta failed:", e));
+}
+
+function enqueueSync(key, value){
+  if(!syncEngine || !canSync()) return;
+  syncEngine.enqueueRecord(key, value).catch((e) => {
+    console.warn("Sync enqueue failed:", e);
+  });
+}
+
+function enqueueFullSync(){
+  if(!syncEngine || !canSync()) return;
+  enqueueSync("settings", state.settings);
+  enqueueSync("rosters", state.rosters);
+  enqueueSync("insights", state.insights);
+  for(const [dateKey, day] of Object.entries(state.logs || {})){
+    enqueueSync(`logs/${dateKey}`, day);
+  }
+}
 
 async function initializeState() {
-  state = await loadState();
+  integrityIssue = null;
+  try{
+    state = await loadState();
+  }catch(e){
+    console.error("State load failed:", e);
+    noteIntegrityIssue("state_load_failed", e);
+    state = createDefaultState();
+  }
+  const openError = getStorageOpenError();
+  if(openError){
+    noteIntegrityIssue("storage_open_failed", openError);
+  }
+  applyIntegrityStatus();
+  updateDstClampDiagnostics();
+  refreshSyncEngine();
+  ensureIndexCaches().catch((e) => {
+    console.error("Index cache load failed:", e);
+  });
   return state;
 }
 
@@ -373,6 +465,61 @@ async function persistDay(dateKey, dayLog) {
   }
 }
 
+function scheduleIndexUpdate(dateKey){
+  if(isSafeMode()) return;
+  updateIndexesForDay({ state, dateKey }).catch((e) => {
+    console.error("Index update failed:", e);
+  });
+}
+
+function scheduleIndexRebuild(){
+  if(isSafeMode()) return;
+  rebuildIndexes(state).catch((e) => {
+    console.error("Index rebuild failed:", e);
+  });
+}
+
+async function loadIndexCaches(){
+  if(typeof storageAdapter.listDayIndex !== "function" || typeof storageAdapter.listWeekIndex !== "function"){
+    state.dayIndex = {};
+    state.weekIndex = {};
+    return;
+  }
+  try{
+    const dayIndex = await storageAdapter.listDayIndex();
+    const weekIndex = await storageAdapter.listWeekIndex();
+    state.dayIndex = dayIndex && typeof dayIndex === "object" ? dayIndex : {};
+    state.weekIndex = weekIndex && typeof weekIndex === "object" ? weekIndex : {};
+  }catch(e){
+    console.error("Failed to load indexes:", e);
+    state.dayIndex = {};
+    state.weekIndex = {};
+  }
+}
+
+function areIndexCachesFresh(){
+  const logs = state.logs || {};
+  const dayIndex = state.dayIndex || {};
+  const weekIndex = state.weekIndex || {};
+  for(const [dateKey, day] of Object.entries(logs)){
+    if(!isDayIndexFresh(dayIndex?.[dateKey], day)) return false;
+  }
+  const weekStart = getWeekStartSetting();
+  const weekKeys = new Set(Object.keys(logs).map((key) => getWeekKeyFromDateKey(key, weekStart)));
+  for(const weekKey of weekKeys){
+    if(!isWeekIndexFresh(weekIndex?.[weekKey], logs)) return false;
+  }
+  return true;
+}
+
+async function ensureIndexCaches(){
+  if(isSafeMode()) return;
+  await loadIndexCaches();
+  if(!areIndexCachesFresh()){
+    scheduleIndexRebuild();
+  }
+}
+
 async function persistRosters() {
   try {
     await storageAdapter.saveRosters(state.rosters);
@@ -391,6 +538,15 @@ async function persistSettings() {
   }
 }
 
+async function persistMeta(){
+  try{
+    await storageAdapter.saveMeta(state.meta);
+  }catch(e){
+    console.error("Failed to persist meta:", e);
+    safeLocalStorageSet(STORAGE_KEY, JSON.stringify(state));
+  }
+}
+
 async function persistInsights() {
   try {
     if(storageAdapter.saveInsights){
@@ -405,6 +561,7 @@ async function persistInsights() {
 }
 
 async function persistAll() {
+  if(isSafeMode()) return;
   try {
     await storageAdapter.saveMeta(state.meta);
     await storageAdapter.saveSettings(state.settings);
@@ -421,6 +578,146 @@ async function persistAll() {
   }
 }
 
+async function applyRemoteDay(dateKey, dayLog){
+  state.logs[dateKey] = deepClone(dayLog);
+  await storageAdapter.saveDay(dateKey, dayLog);
+  scheduleIndexUpdate(dateKey);
+}
+
+async function applyRemoteSettings(settings){
+  state.settings = mergeSettings(state.settings, settings);
+  updateDstClampDiagnostics();
+  await storageAdapter.saveSettings(state.settings);
+  scheduleIndexRebuild();
+}
+
+async function applyRemoteRosters(rosters){
+  state.rosters = mergeRosters(state.rosters, rosters, { dedupeByLabel: true });
+  await storageAdapter.saveRosters(state.rosters);
+  scheduleIndexRebuild();
+}
+
+async function applyRemoteInsights(insights){
+  state.insights = mergeInsightsState(state.insights, insights);
+  if(storageAdapter.saveInsights){
+    await storageAdapter.saveInsights(state.insights);
+  }
+}
+
+async function applyRemoteMeta(meta){
+  state.meta = { ...state.meta, ...(meta || {}) };
+  await storageAdapter.saveMeta(state.meta);
+}
+
+function refreshSyncEngine(){
+  if(!syncEngine){
+    syncEngine = createSyncEngine({
+      getState: () => state,
+      applyRemoteDay,
+      applyRemoteSettings,
+      applyRemoteRosters,
+      applyRemoteInsights,
+      applyRemoteMeta,
+      onSyncMeta: updateSyncMeta,
+      onAudit: logAudit
+    });
+  }
+  syncEngine.stop();
+  if(canSync()){
+    syncEngine.start();
+  }
+}
+
+async function getSyncLink(){
+  const creds = await getSyncCredentials();
+  if(!creds || !creds.spaceId || !creds.authToken) return "";
+  return buildSyncLink({ ...creds, endpoint: state.settings?.sync?.endpoint });
+}
+
+async function applySyncLink(link){
+  const parsed = parseSyncLink(link);
+  if(!parsed){
+    return { ok: false, error: "Invalid sync link." };
+  }
+  const existing = await getSyncCredentials();
+  const next = {
+    ...(existing || {}),
+    spaceId: parsed.spaceId,
+    authToken: parsed.authToken,
+    endpoint: parsed.endpoint || state.settings?.sync?.endpoint,
+    e2ee: parsed.e2ee ? { ...parsed.e2ee } : (existing?.e2ee || undefined)
+  };
+  await saveSyncCredentials(next);
+  updateSettings({
+    sync: {
+      ...state.settings.sync,
+      mode: "hosted",
+      endpoint: parsed.endpoint || state.settings?.sync?.endpoint,
+      encryption: parsed.e2ee?.enabled ? "e2ee" : (state.settings?.sync?.encryption || "none")
+    }
+  });
+  refreshSyncEngine();
+  return { ok: true, e2ee: !!parsed.e2ee?.enabled };
+}
+
+async function resetSyncSpace(){
+  await clearSyncCredentials();
+  if(storageAdapter.saveOutbox){
+    await storageAdapter.saveOutbox([]);
+  }
+  syncEngine?.clearE2eePassphrase();
+  updateSyncMeta({ status: "idle", pendingOutbox: 0, lastError: "" });
+  refreshSyncEngine();
+  return { ok: true };
+}
+
+async function setSyncPassphrase(passphrase){
+  if(!syncEngine) return { ok: false, error: "Sync engine not available." };
+  if(!passphrase){
+    return { ok: false, error: "Passphrase required." };
+  }
+  syncEngine.setE2eePassphrase(passphrase);
+  return { ok: true };
+}
+
+async function setSyncEncryption(mode, passphrase){
+  const encryption = (mode === "e2ee") ? "e2ee" : "none";
+  const existing = await getSyncCredentials();
+  if(encryption === "e2ee" && (!existing?.spaceId || !existing?.authToken)){
+    return { ok: false, error: "Set a sync link before enabling E2EE." };
+  }
+  if(encryption === "e2ee"){
+    const pass = typeof passphrase === "string" ? passphrase : "";
+    if(!pass){
+      return { ok: false, error: "Passphrase required." };
+    }
+  }
+  const nextCreds = {
+    ...(existing || {}),
+    e2ee: encryption === "e2ee"
+      ? { enabled: true, iterations: DEFAULT_ITERATIONS, hash: DEFAULT_HASH, salt: existing?.e2ee?.salt || undefined }
+      : { enabled: false }
+  };
+  await saveSyncCredentials(nextCreds);
+  updateSettings({
+    sync: {
+      ...state.settings.sync,
+      encryption
+    }
+  });
+  if(encryption === "e2ee"){
+    syncEngine?.setE2eePassphrase(String(passphrase));
+  }else{
+    syncEngine?.clearE2eePassphrase();
+  }
+  return { ok: true };
+}
+
+async function syncNow(){
+  if(!syncEngine) return;
+  await syncEngine.syncNow();
+}
+
 async function listSnapshots(){
   try{
     return await storageAdapter.listSnapshots();
@@ -434,6 +731,7 @@ async function createSnapshot(label){
   const nextLabel = (typeof label === "string" && label.trim()) ? label.trim() : "Manual snapshot";
   try{
     const result = await saveSnapshotWithRetention({ label: nextLabel, state });
+    logAudit("snapshot_create", `Snapshot "${nextLabel}" created.`, "info", { id: result?.saved?.id, label: nextLabel });
     return result?.saved || null;
   }catch(e){
     console.error("Failed to create snapshot:", e);
@@ -444,19 +742,44 @@ async function createSnapshot(label){
 async function restoreSnapshot(snapshotId){
   await storageAdapter.restoreSnapshot(snapshotId);
   const loaded = await storageAdapter.loadState();
+  integrityIssue = null;
   if(loaded){
-    state = hydrateState(loaded);
+    state = finalizeLoadedState(hydrateState(loaded));
   }else{
-    state = createDefaultState();
+    state = finalizeLoadedState(createDefaultState());
   }
+  const openError = getStorageOpenError();
+  if(openError){
+    noteIntegrityIssue("storage_open_failed", openError);
+  }
+  applyIntegrityStatus();
+  updateDstClampDiagnostics();
+  scheduleIndexRebuild();
+  logAudit("snapshot_restore", "Snapshot restored.", "info", { id: snapshotId });
 }
 
 async function deleteSnapshot(snapshotId){
   try{
     await storageAdapter.deleteSnapshot(snapshotId);
+    logAudit("snapshot_delete", "Snapshot deleted.", "info", { id: snapshotId });
   }catch(e){
     console.error("Failed to delete snapshot:", e);
     throw e;
+  }
+}
+
+function logAudit(type, message, level, detail){
+  appendAuditEvent({ type, message, level, detail }).catch((e) => {
+    console.error("Audit log failed:", e);
+  });
+}
+
+async function listAuditLog(){
+  try{
+    return await listAuditEvents();
+  }catch(e){
+    console.error("Audit log fetch failed:", e);
+    return [];
   }
 }
 
@@ -513,15 +836,18 @@ function getDay(dateKey){
   if(typeof supp.notes !== "string") supp.notes = supp.notes ? String(supp.notes) : "";
   if(typeof supp.tsLast !== "string") supp.tsLast = supp.tsLast ? String(supp.tsLast) : "";
   out.supplements = supp;
+  out.highFatDay = normalizeTri(out.highFatDay);
 
   ensureDayMeta(out);
   return out;
 }
 
 function setDay(dateKey, day){
+  enqueueSync(`logs/${dateKey}`, day);
   state.logs[dateKey] = deepClone(day);
   // Fire-and-forget persistence (don't block UI)
   persistDay(dateKey, day).catch(e => console.error("Persist day failed:", e));
+  scheduleIndexUpdate(dateKey);
 }
 
 function addDays(d, days){
@@ -564,6 +890,7 @@ function toggleSegmentItem(dateKey, segId, category, itemId){
   if(!seg) return;
   const nowIso = new Date().toISOString();
   toggleSegmentItemInSegment(seg, segId, category, itemId, nowIso);
+  if(canSync() && syncEngine) syncEngine.stampRecord(seg);
   touchDay(day, nowIso);
   setDay(dateKey, day);
 }
@@ -574,6 +901,7 @@ function setSegmentStatus(dateKey, segId, status){
   if(!seg) return;
   const nowIso = new Date().toISOString();
   if(!applySegmentStatus(seg, segId, status, nowIso)) return;
+  if(canSync() && syncEngine) syncEngine.stampRecord(seg);
   touchDay(day, nowIso);
   setDay(dateKey, day);
 }
@@ -593,6 +921,7 @@ function setSegmentField(dateKey, segId, field, value){
 
   const nowIso = new Date().toISOString();
   touchSegment(seg, nowIso);
+  if(canSync() && syncEngine) syncEngine.stampRecord(seg);
   touchDay(day, nowIso);
 
   setDay(dateKey, day);
@@ -608,6 +937,7 @@ function clearSegment(dateKey, segId){
   seg.status = "unlogged";
   const nowIso = new Date().toISOString();
   touchSegment(seg, nowIso);
+  if(canSync() && syncEngine) syncEngine.stampRecord(seg);
   touchDay(day, nowIso);
 
   setDay(dateKey, day);
@@ -620,6 +950,7 @@ function copySegment(dateKey, targetSegId, sourceSeg){
   if(!target) return;
   const nowIso = new Date().toISOString();
   const next = copySegmentFromSource(targetSegId, target, sourceSeg, nowIso);
+  if(canSync() && syncEngine) syncEngine.stampRecord(next);
   day.segments[targetSegId] = next;
   touchDay(day, nowIso);
   setDay(dateKey, day);
@@ -653,7 +984,27 @@ function setSupplementsNotes(dateKey, notes){
 
 function toggleBoolField(dateKey, field){
   const day = getDay(dateKey);
-  day[field] = !day[field];
+  if(typeof day[field] === "string"){
+    const normalized = normalizeTri(day[field]);
+    if(normalized === "yes"){
+      day[field] = "no";
+    }else if(normalized === "no"){
+      day[field] = "auto";
+    }else{
+      day[field] = "yes";
+    }
+  }else{
+    day[field] = !day[field];
+  }
+  touchDay(day);
+  setDay(dateKey, day);
+}
+
+function toggleTriField(dateKey, field){
+  const day = getDay(dateKey);
+  const current = normalizeTri(day[field]);
+  const next = (current === "auto") ? "yes" : (current === "yes" ? "no" : "auto");
+  day[field] = next;
   touchDay(day);
   setDay(dateKey, day);
 }
@@ -670,6 +1021,25 @@ function addRosterItem(category, item){
   roster.push(entry);
   state.rosters[category] = roster;
   persistRosters().catch(e => console.error("Persist rosters failed:", e));
+  enqueueSync("rosters", state.rosters);
+  return entry;
+}
+
+function addRosterItemWithId(category, itemId, label){
+  const id = typeof itemId === "string" ? itemId.trim() : "";
+  const name = normalizeLabel(label || "");
+  if(!id || !name) return null;
+
+  const roster = state.rosters[category] || [];
+  if(roster.find((entry) => entry && entry.id === id)) return null;
+
+  const template = findDefaultRosterTemplate(category, name);
+  const entry = createRosterItem(name, { id, tags: template?.tags || [] });
+  roster.push(entry);
+  state.rosters[category] = roster;
+  persistRosters().catch(e => console.error("Persist rosters failed:", e));
+  scheduleIndexRebuild();
+  enqueueSync("rosters", state.rosters);
   return entry;
 }
 
@@ -688,12 +1058,16 @@ function removeRosterItem(category, itemId){
     const dayChanged = scrubRosterItemFromDay(day, category, itemId, nowIso);
     if(dayChanged){
       touchDay(day, nowIso);
+      enqueueSync(`logs/${dk}`, day);
       state.logs[dk] = day;
       persistDay(dk, day).catch(e => console.error("Persist day failed:", e));
+      scheduleIndexUpdate(dk);
     }
   }
 
   persistRosters().catch(e => console.error("Persist rosters failed:", e));
+  scheduleIndexRebuild();
+  enqueueSync("rosters", state.rosters);
 }
 
 function updateRosterItem(category, itemId, updater){
@@ -706,6 +1080,8 @@ function updateRosterItem(category, itemId, updater){
   roster[idx] = next;
   state.rosters[category] = roster;
   persistRosters().catch(e => console.error("Persist rosters failed:", e));
+  scheduleIndexRebuild();
+  enqueueSync("rosters", state.rosters);
   return next;
 }
 
@@ -815,29 +1191,114 @@ async function importState(file){
 
 function updateSettings(nextSettings){
   state.settings = mergeSettings(state.settings, nextSettings);
+  updateDstClampDiagnostics();
   persistSettings().catch(e => console.error("Persist settings failed:", e));
+  scheduleIndexRebuild();
+  enqueueSync("settings", state.settings);
+  refreshSyncEngine();
 }
+
+function updateDstClampDiagnostics(now){
+  const date = now instanceof Date ? now : new Date();
+  const info = inspectDstClamp(date, state.settings);
+  state.meta.integrity = {
+    ...(state.meta.integrity || {}),
+    dstClamp: {
+      dateKey: dateToKey(date),
+      applied: info.applied,
+      ambiguous: info.ambiguous,
+      fields: info.fields,
+      ts: date.toISOString()
+    }
+  };
+  persistMeta().catch((e) => console.error("Persist meta failed:", e));
+}
+
+function noteIntegrityIssue(reason, error){
+  if(integrityIssue) return;
+  integrityIssue = {
+    reason: reason || "unknown",
+    error: error instanceof Error ? error.message : String(error || "")
+  };
+}
+
+function applyIntegrityStatus(){
+  const nowIso = new Date().toISOString();
+  const safeMode = !!integrityIssue;
+  state.meta.integrity = {
+    ...(state.meta.integrity || {}),
+    safeMode,
+    lastIntegrityCheckTs: nowIso
+  };
+  if(safeMode && state.settings?.sync){
+    state.settings.sync = {
+      ...state.settings.sync,
+      mode: "off"
+    };
+  }
+  persistMeta().catch((e) => console.error("Persist meta failed:", e));
+}
+
+function isSafeMode(){
+  return !!state.meta?.integrity?.safeMode;
+}
+
+let safeModeWarned = false;
+
+function notifySafeMode(){
+  if(safeModeWarned) return;
+  safeModeWarned = true;
+  try{
+    alert("Safe Mode is active. Editing is disabled; use Diagnostics to export or restore a snapshot.");
+  }catch(e){
+    // ignore alert failures in non-browser contexts
+  }
+}
+
+const SAFE_MODE_ALLOW = new Set([
+  "exportState",
+  "exportCsv",
+  "decryptImportPayload",
+  "validateImportPayload",
+  "listSnapshots",
+  "restoreSnapshot",
+  "listAuditLog"
+]);
+const SAFE_MODE_BLOCKED_RETURN = {
+  applyImportPayload: { ok: false, error: "Safe Mode is active." },
+  createSnapshot: () => Promise.reject(new Error("Safe Mode is active.")),
+  deleteSnapshot: () => Promise.reject(new Error("Safe Mode is active."))
+};
+const guardActions = createSafeModeGuards({
+  isSafeMode,
+  notify: notifySafeMode,
+  allow: [...SAFE_MODE_ALLOW],
+  blockedReturn: SAFE_MODE_BLOCKED_RETURN
+});
 
 function dismissInsightAction(insight){
   if(!insight) return;
   state.insights = dismissInsight(state.insights, insight);
   persistInsights().catch(e => console.error("Persist insights failed:", e));
+  enqueueSync("insights", state.insights);
 }
 
 function toggleFocusMode(){
   state.settings.focusMode = (state.settings.focusMode === "full") ? "nowfade" : "full";
   persistSettings().catch(e => console.error("Persist settings failed:", e));
+  enqueueSync("settings", state.settings);
 }
 
 function resetDay(dateKey){
-  state.logs[dateKey] = createDefaultDay();
-  persistDay(dateKey, state.logs[dateKey]).catch(e => console.error("Persist day failed:", e));
+  const day = createDefaultDay();
+  setDay(dateKey, day);
 }
 
 function replaceState(nextState){
   if(!nextState || typeof nextState !== "object") return;
   state = deepClone(nextState);
   persistAll().catch(e => console.error("Persist state failed:", e));
+  scheduleIndexRebuild();
 }
 
 async function applyImportPayload(payload, mode){
@@ -874,6 +1335,9 @@ async function applyImportPayload(payload, mode){
     next.insights = mergeInsightsState(createInsightsState(), next.insights);
     state = next;
     await persistAll();
+    scheduleIndexRebuild();
+    refreshSyncEngine();
+    enqueueFullSync();
     return { ok: true, mode: "replace", version: validation.version, legacy: validation.legacy };
   }
 
@@ -886,10 +1350,58 @@ async function applyImportPayload(payload, mode){
 
   state = merged;
   await persistAll();
+  scheduleIndexRebuild();
+  refreshSyncEngine();
+  enqueueFullSync();
   return { ok: true, mode: "merge", version: validation.version, legacy: validation.legacy };
 }
 
 const els = getElements();
+const rawActions = {
+  toggleSegmentItem,
+  setSegmentField,
+  setSegmentStatus,
+  clearSegment,
+  copySegment,
+  canCopyYesterday,
+  copyYesterday,
+  setDayField,
+  toggleSupplementItem,
+  setSupplementsNotes,
+  toggleBoolField,
+  toggleTriField,
+  addRosterItem,
+  addRosterItemWithId,
+  removeRosterItem,
+  updateRosterLabel,
+  updateRosterAliases,
+  updateRosterTags,
+  toggleRosterPinned: toggleRosterPinnedAction,
+  toggleRosterArchived: toggleRosterArchivedAction,
+  exportState,
+  exportCsv,
+  importState,
+  decryptImportPayload,
+  validateImportPayload,
+  applyImportPayload,
+  listSnapshots,
+  createSnapshot,
+  restoreSnapshot,
+  deleteSnapshot,
+  listAuditLog,
+  getSyncLink,
+  applySyncLink,
+  resetSyncSpace,
+  setSyncEncryption,
+  setSyncPassphrase,
+  syncNow,
+  replaceState,
+  updateSettings,
+  toggleFocusMode,
+  dismissInsight: dismissInsightAction,
+  resetDay
+};
+const actions = guardActions(rawActions);
 const ui = createLegacyUI({
   els,
   getState: () => state,
@@ -906,6 +1418,7 @@ const ui = createLegacyUI({
     escapeHtml,
     clamp,
     nowMinutes,
+    clampLocalTime,
     computeSunTimes,
     yyyyMmDd,
     addDays,
@@ -915,41 +1428,7 @@ const ui = createLegacyUI({
   defaults: {
     DEFAULT_SETTINGS
   },
-  actions: {
-    toggleSegmentItem,
-    setSegmentField,
-    setSegmentStatus,
-    clearSegment,
-    copySegment,
-    canCopyYesterday,
-    copyYesterday,
-    setDayField,
-    toggleSupplementItem,
-    setSupplementsNotes,
-    toggleBoolField,
-    addRosterItem,
-    removeRosterItem,
-    updateRosterLabel,
-    updateRosterAliases,
-    updateRosterTags,
-    toggleRosterPinned: toggleRosterPinnedAction,
-    toggleRosterArchived: toggleRosterArchivedAction,
-    exportState,
-    exportCsv,
-    importState,
-    decryptImportPayload,
-    validateImportPayload,
-    applyImportPayload,
-    listSnapshots,
-    createSnapshot,
-    restoreSnapshot,
-    deleteSnapshot,
-    replaceState,
-    updateSettings,
-    toggleFocusMode,
-    dismissInsight: dismissInsightAction,
-    resetDay
-  }
+  actions
 });
 
 // Boot sequence: load state, then initialize UI
@@ -957,9 +1436,27 @@ const ui = createLegacyUI({
   try {
     await initializeState();
     ui.init();
+    wireFlushEvents();
+    logAudit("boot", "App booted.");
   } catch(e) {
     console.error("Boot failed:", e);
     // Fall back to default state and init UI anyway
     ui.init();
+    wireFlushEvents();
+    logAudit("boot_failed", "App boot failed.", "error", { message: e?.message || String(e) });
   }
 })();
+
+function wireFlushEvents(){
+  if(typeof window === "undefined" || typeof document === "undefined") return;
+  const flush = () => {
+    if(isSafeMode()) return;
+    persistAll().catch((e) => console.error("Flush persist failed:", e));
+  };
+  window.addEventListener("pagehide", flush);
+  document.addEventListener("visibilitychange", () => {
+    if(document.visibilityState === "hidden"){
+      flush();
+    }
+  });
+}
