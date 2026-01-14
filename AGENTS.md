@@ -160,6 +160,7 @@ We optimize for clarity and maintainability over long‑term backward compatibil
 
 - Use `python3 -m http.server` for local serving when needed.
 - No package manager is required unless adding tools; if that changes, document it here.
+- Testing tooling decision: Playwright is preferred for e2e and browser-only unit tests (npm dev-only).
 - Prefer `rg` for search.
 
 ---
