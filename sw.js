@@ -1,6 +1,6 @@
 /* App-shell cache with explicit versioning */
 const CACHE_PREFIX = "shredmaxx-app-shell";
-const CACHE_VERSION = "v4-0.1";
+const CACHE_VERSION = "v4-0.3";
 const CACHE_NAME = `${CACHE_PREFIX}-${CACHE_VERSION}`;
 
 const ASSETS = [
@@ -18,8 +18,14 @@ const ASSETS = [
   "./domain/selectors.js",
   "./domain/roster.js",
   "./domain/roster_defaults.js",
+  "./domain/roster_edit.js",
+  "./domain/revisions.js",
   "./domain/flags.js",
   "./domain/heuristics.js",
+  "./domain/search.js",
+  "./domain/rotation.js",
+  "./domain/coverage.js",
+  "./domain/correlations.js",
   "./domain/recents.js",
   "./domain/weekly.js",
   "./storage/adapter.js",
