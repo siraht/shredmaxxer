@@ -2,6 +2,7 @@
 
 import {
   computeSegmentCoverage,
+  computeIssueFrequency,
   computeWeeklyUniqueCounts,
   summarizeFtnModes,
   getWeekDateKeys,
@@ -16,9 +17,10 @@ function assert(condition, label){
 
 const logs = {
   "2026-01-12": {
+    highFatDay: true,
     segments: {
       ftn: { status: "logged", ftnMode: "strict", proteins: ["p1"], carbs: [], fats: [], micros: [] },
-      lunch: { status: "none", proteins: ["p2"], carbs: ["c1"], fats: [], micros: ["m1"], seedOil: "yes" }
+      lunch: { status: "none", proteins: ["p2"], carbs: ["c1"], fats: ["f1"], micros: ["m1"], seedOil: "yes", collision: "auto", highFatMeal: "auto" }
     }
   },
   "2026-01-13": {
@@ -52,6 +54,18 @@ assert(coverage.lunch.none === 1, "coverage lunch none");
 assert(coverage.lunch.unlogged === 2, "coverage lunch unlogged");
 assert(coverage.dinner.unlogged === 3, "coverage dinner unlogged");
 assert(coverage.late.unlogged === 3, "coverage late unlogged");
+
+const rosters = {
+  carbs: [{ id: "c1", label: "Starch", tags: ["carb:starch"] }, { id: "c2", label: "Fruit", tags: ["carb:fruit"] }],
+  fats: [{ id: "f1", label: "Tallow", tags: ["fat:dense"] }, { id: "f2", label: "Olive", tags: [] }],
+  proteins: [],
+  micros: []
+};
+const issues = computeIssueFrequency(logs, dateKeys, rosters);
+assert(issues.collisionDays === 2, "collision days count");
+assert(issues.seedOilDays === 1, "seed oil days count");
+assert(issues.highFatMealDays === 2, "high-fat meal days count");
+assert(issues.highFatDayDays === 1, "high-fat day toggle count");
 
 const anchor = new Date("2026-01-13T12:00:00");
 const weekStart = getWeekStartDate(anchor, 1);
