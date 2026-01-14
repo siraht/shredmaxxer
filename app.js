@@ -14,9 +14,10 @@ import { createInsightsState, mergeInsightsState, dismissInsight } from "./domai
 import { mergeRosters } from "./storage/merge.js";
 import { savePreImportSnapshot, saveSnapshotWithRetention } from "./storage/snapshots.js";
 import { rebuildIndexes, updateIndexesForDay } from "./storage/indexes.js";
+import { getWeekKeyFromDateKey, isDayIndexFresh, isWeekIndexFresh } from "./domain/indexes.js";
 import { createDefaultRosters, findDefaultRosterTemplate } from "./domain/roster_defaults.js";
 import { createRosterItem, findRosterItemByLabel, normalizeLabel } from "./domain/roster.js";
-import { setRosterLabel, setRosterAliases, setRosterTags, toggleRosterPinned, toggleRosterArchived } from "./domain/roster_edit.js";
+import { setRosterLabel, setRosterAliases, setRosterTags, setRosterIcon, toggleRosterPinned, toggleRosterArchived } from "./domain/roster_edit.js";
 import { migrateV3ToV4 } from "./storage/migrate.js";
 import { APP_VERSION, buildMeta } from "./storage/meta.js";
 import { serializeExport } from "./storage/export.js";
@@ -394,6 +395,8 @@ function hydrateState(obj){
 
 let state = createDefaultState();
 let syncEngine = null;
+let ui = null;
+let syncRenderTimer = null;
 
 function canSync(){
   return !isSafeMode() && state.settings?.sync?.mode === "hosted";
@@ -403,6 +406,14 @@ function updateSyncMeta(patch){
   const next = { ...(state.meta.sync || {}), ...(patch || {}) };
   state.meta.sync = next;
   persistMeta().catch((e) => console.error("Persist meta failed:", e));
+  if(ui && typeof ui.renderAll === "function"){
+    if(!syncRenderTimer){
+      syncRenderTimer = setTimeout(() => {
+        syncRenderTimer = null;
+        ui.renderAll();
+      }, 0);
+    }
+  }
 }
 
 function enqueueSync(key, value){
@@ -450,6 +461,11 @@ function getActiveDateKey(){
 
 function getActiveDate(){
   return dateFromKey(getActiveDateKey());
+}
+
+function getWeekStartSetting(){
+  const raw = state?.settings?.weekStart;
+  return Number.isFinite(raw) && raw >= 0 && raw <= 6 ? raw : 0;
 }
 
 let currentDate = getActiveDate();
@@ -772,6 +788,10 @@ function logAudit(type, message, level, detail){
   appendAuditEvent({ type, message, level, detail }).catch((e) => {
     console.error("Audit log failed:", e);
   });
+}
+
+function logAuditEvent(type, message, level, detail){
+  logAudit(type, message, level, detail);
 }
 
 async function listAuditLog(){
@@ -1099,6 +1119,10 @@ function updateRosterTags(category, itemId, tags){
   return updateRosterItem(category, itemId, (item) => setRosterTags(item, tags));
 }
 
+function updateRosterIcon(category, itemId, icon){
+  return updateRosterItem(category, itemId, (item) => setRosterIcon(item, icon));
+}
+
 function toggleRosterPinnedAction(category, itemId){
   return updateRosterItem(category, itemId, (item) => toggleRosterPinned(item));
 }
@@ -1262,7 +1286,8 @@ const SAFE_MODE_ALLOW = new Set([
   "validateImportPayload",
   "listSnapshots",
   "restoreSnapshot",
-  "listAuditLog"
+  "listAuditLog",
+  "logAuditEvent"
 ]);
 const SAFE_MODE_BLOCKED_RETURN = {
   applyImportPayload: { ok: false, error: "Safe Mode is active." },
@@ -1376,6 +1401,7 @@ const rawActions = {
   updateRosterLabel,
   updateRosterAliases,
   updateRosterTags,
+  updateRosterIcon,
   toggleRosterPinned: toggleRosterPinnedAction,
   toggleRosterArchived: toggleRosterArchivedAction,
   exportState,
@@ -1389,6 +1415,7 @@ const rawActions = {
   restoreSnapshot,
   deleteSnapshot,
   listAuditLog,
+  logAuditEvent,
   getSyncLink,
   applySyncLink,
   resetSyncSpace,
@@ -1402,7 +1429,7 @@ const rawActions = {
   resetDay
 };
 const actions = guardActions(rawActions);
-const ui = createLegacyUI({
+ui = createLegacyUI({
   els,
   getState: () => state,
   getDay,

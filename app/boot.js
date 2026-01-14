@@ -13,16 +13,17 @@ if("serviceWorker" in navigator){
   let refreshing = false;
 
   const showUpdate = (registration) => {
-    if(!toast || !reloadBtn) return;
+    if(!registration || !toast || !reloadBtn) return;
     toast.hidden = false;
     reloadBtn.onclick = () => {
-      if(registration.waiting){
+      if(registration && registration.waiting){
         registration.waiting.postMessage({ type: "SKIP_WAITING" });
       }
     };
   };
 
   navigator.serviceWorker.register(swUrl).then((registration) => {
+    if(!registration) return;
     if(registration.waiting && navigator.serviceWorker.controller){
       showUpdate(registration);
     }

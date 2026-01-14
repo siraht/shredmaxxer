@@ -18,6 +18,7 @@ const STORES = {
 };
 
 let openPromise = null;
+let openDb = null;
 
 export function isIndexedDbAvailable(){
   return typeof indexedDB !== "undefined";
@@ -52,8 +53,10 @@ function openDatabase(){
     };
     req.onsuccess = () => {
       const db = req.result;
+      openDb = db;
       db.onversionchange = () => {
         db.close();
+        openDb = null;
         openPromise = null;
       };
       resolve(db);
@@ -69,6 +72,18 @@ function openDatabase(){
   });
 
   return openPromise;
+}
+
+export function resetOpenDatabase(){
+  if(openDb){
+    try{
+      openDb.close();
+    }catch(e){
+      // ignore
+    }
+  }
+  openDb = null;
+  openPromise = null;
 }
 
 function withStore(db, storeName, mode, fn){

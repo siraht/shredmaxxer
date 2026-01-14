@@ -66,6 +66,25 @@ export function setRosterTags(item, tags, now){
 }
 
 /**
+ * Update roster icon (trimmed).
+ * @param {any} item
+ * @param {string} icon
+ * @param {Date} [now]
+ * @returns {any}
+ */
+export function setRosterIcon(item, icon, now){
+  const ts = (now instanceof Date ? now : new Date()).toISOString();
+  const next = String(icon || "").trim();
+  const out = { ...item, tsUpdated: ts };
+  if(next){
+    out.icon = next;
+  }else{
+    delete out.icon;
+  }
+  return out;
+}
+
+/**
  * Toggle pinned flag.
  * @param {any} item
  * @param {Date} [now]
@@ -99,6 +118,7 @@ export default {
   setRosterLabel,
   setRosterAliases,
   setRosterTags,
+  setRosterIcon,
   toggleRosterPinned,
   toggleRosterArchived
 };
