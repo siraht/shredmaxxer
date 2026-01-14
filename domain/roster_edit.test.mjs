@@ -32,8 +32,12 @@ assert(tags.tags.length === 1 && tags.tags[0] === "carb", "tags dedupe + trim");
 
 const pinned = toggleRosterPinned(base, now);
 assert(pinned.pinned === true, "toggle pinned");
+const unpinned = toggleRosterPinned(pinned, now);
+assert(unpinned.pinned === false, "toggle pinned twice");
 
 const archived = toggleRosterArchived(base, now);
 assert(archived.archived === true, "toggle archived");
+const unarchived = toggleRosterArchived(archived, now);
+assert(unarchived.archived === false, "toggle archived twice");
 
 console.log("roster edit tests: ok");

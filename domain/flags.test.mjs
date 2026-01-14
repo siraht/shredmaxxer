@@ -1,6 +1,6 @@
 // @ts-check
 
-import { buildTagIndex, computeCollisionAuto, computeHighFatMealAuto, computeSeedOilHint, resolveTri } from "./flags.js";
+import { buildTagIndex, computeCollisionAuto, computeHighFatMealAuto, computeSeedOilHint, computeSegmentFlags, resolveTri } from "./flags.js";
 
 function assert(condition, label){
   if(!condition){
@@ -29,6 +29,15 @@ assert(computeSeedOilHint(seg, tagIndex) === false, "seed oil hint false without
 const seg2 = { carbs: ["c2"], fats: ["f2"] };
 assert(computeCollisionAuto(seg2, tagIndex) === false, "no collision for fruit + seed oil");
 assert(computeSeedOilHint(seg2, tagIndex) === true, "seed oil hint true for seed oil tag");
+
+const seg3 = { carbs: ["c1"], fats: [] };
+assert(computeCollisionAuto(seg3, tagIndex) === false, "collision false without fat");
+assert(computeHighFatMealAuto(seg3, tagIndex) === false, "high-fat false without dense fat");
+
+const seg4 = { carbs: ["c1"], fats: ["f1"], collision: "no", highFatMeal: "yes" };
+const flags = computeSegmentFlags(seg4, tagIndex);
+assert(flags.collisionEffective === "no", "collision override no");
+assert(flags.highFatMealEffective === "yes", "high-fat override yes");
 
 assert(resolveTri("yes", false) === "yes", "override yes wins");
 assert(resolveTri("no", true) === "no", "override no wins");

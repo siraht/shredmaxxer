@@ -1,10 +1,12 @@
 // @ts-check
 
 import {
+  collectWeeklySets,
   computeSegmentCoverage,
   computeIssueFrequency,
   computeWeeklySummary,
   computeWeeklyUniqueCounts,
+  getPhaseTargetLabel,
   summarizeFtnModes,
   getWeekDateKeys,
   getWeekStartDate
@@ -38,6 +40,12 @@ assert(counts.proteins === 2, "unique proteins count");
 assert(counts.carbs === 2, "unique carbs count");
 assert(counts.fats === 2, "unique fats count");
 assert(counts.micros === 2, "unique micros count");
+assert(counts.sets.proteins.has("p1"), "unique sets include p1");
+assert(counts.sets.carbs.has("c1"), "unique sets include c1");
+
+const sets = collectWeeklySets(logs, dateKeys);
+assert(sets.proteins.size === 2, "collectWeeklySets proteins size");
+assert(sets.micros.has("m2"), "collectWeeklySets includes micros");
 
 const ftn = summarizeFtnModes(logs, dateKeys);
 assert(ftn.strict === 1, "ftn strict count");
@@ -76,11 +84,21 @@ const summary = computeWeeklySummary({
   phase: ""
 });
 assert(Array.isArray(summary.correlations), "summary correlations array");
+assert(summary.dateKeys.length === 7, "summary has 7 date keys");
+assert(summary.matrix.length === 7, "summary matrix has 7 rows");
+assert(summary.phaseLabel === "", "phase label empty by default");
 
 const anchor = new Date("2026-01-13T12:00:00");
 const weekStart = getWeekStartDate(anchor, 1);
 assert(weekStart.getDay() === 1, "week start Monday");
 const keys = getWeekDateKeys(anchor, 1);
 assert(keys.length === 7, "week keys length");
+const sundayStart = getWeekStartDate(anchor, 0);
+assert(sundayStart.getDay() === 0, "week start Sunday");
+
+assert(getPhaseTargetLabel("strict").length > 0, "phase label strict");
+assert(getPhaseTargetLabel("maintenance").length > 0, "phase label maintenance");
+assert(getPhaseTargetLabel("advanced").length > 0, "phase label advanced");
+assert(getPhaseTargetLabel("") === "", "phase label empty");
 
 console.log("weekly tests: ok");

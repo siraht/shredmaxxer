@@ -69,4 +69,35 @@ assert(ftnProteins === "Beef", "IDs mapped to labels");
 const csv = serializeCsv(state);
 assert(csv.includes("2026-01-02"), "serializeCsv includes data");
 
+const edgeState = {
+  settings: { phase: "strict" },
+  rosters: {
+    proteins: [{ id: "p1", label: "Fish, \"Salmon\"" }],
+    carbs: [],
+    fats: [],
+    micros: []
+  },
+  logs: {
+    "2026-01-03": {
+      segments: {
+        ftn: { ftnMode: "ftn", proteins: ["p1"], carbs: [], fats: [], micros: [], collision: "auto", highFatMeal: "auto", seedOil: "", notes: "" },
+        lunch: { proteins: [], carbs: [], fats: [], micros: [], collision: "auto", highFatMeal: "auto", seedOil: "", notes: "" },
+        dinner: { proteins: [], carbs: [], fats: [], micros: [], collision: "auto", highFatMeal: "auto", seedOil: "", notes: "" },
+        late: { proteins: [], carbs: [], fats: [], micros: [], collision: "auto", highFatMeal: "auto", seedOil: "", notes: "" }
+      },
+      movedBeforeLunch: false,
+      trained: false,
+      highFatDay: false,
+      energy: "",
+      mood: "",
+      cravings: "",
+      notes: "note, \"quoted\"\nline2"
+    }
+  }
+};
+
+const edgeCsv = serializeCsv(edgeState);
+assert(edgeCsv.includes("\"Fish, \"\"Salmon\"\"\""), "labels with commas/quotes are escaped");
+assert(edgeCsv.includes("\"note, \"\"quoted\"\"\nline2\""), "notes with commas/quotes/newlines are escaped");
+
 console.log("csv tests: ok");

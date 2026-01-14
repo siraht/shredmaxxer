@@ -31,6 +31,12 @@ const logs = {
       ftn: { ftnMode: "off", proteins: [], carbs: [], fats: [], micros: [] },
       dinner: { proteins: [], carbs: [], fats: [], micros: [], collision: "no", seedOil: "yes" }
     }
+  },
+  "2026-01-12": {
+    // missing energy/cravings should be ignored
+    segments: {
+      ftn: { ftnMode: "ftn", proteins: [], carbs: [], fats: [], micros: [] }
+    }
   }
 };
 
@@ -42,5 +48,6 @@ assert(collision && collision.b.count === 1, "non-collision days count");
 const energy = correlations.find((c) => c.id === "energy-ftn");
 assert(energy && energy.a.count === 1, "ftn strict count");
 assert(energy && energy.b.count === 1, "ftn off count");
+assert(energy && energy.total === 2, "missing energy does not count");
 
 console.log("correlation tests: ok");
