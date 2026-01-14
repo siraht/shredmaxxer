@@ -3,6 +3,14 @@
 import fs from "fs/promises";
 import { openTab, openSegment, closeSegment, selectChipByLabel, setSegmented } from "./helpers.mjs";
 
+async function openDetails(page, label){
+  await page.evaluate((summaryLabel) => {
+    const panels = Array.from(document.querySelectorAll("details"));
+    const panel = panels.find((el) => (el.querySelector("summary")?.textContent || "").includes(summaryLabel));
+    if(panel) panel.open = true;
+  }, label);
+}
+
 async function readDownloadJson(download){
   const filePath = await download.path();
   if(!filePath){
@@ -36,6 +44,7 @@ export async function run({ page, step, assert, helpers }){
 
   await step("export JSON", async () => {
     await openTab(page, "tabHistory");
+    await openDetails(page, "Backup + Import");
     const [download] = await Promise.all([
       page.waitForEvent("download"),
       page.click("#exportBtn")
@@ -48,6 +57,7 @@ export async function run({ page, step, assert, helpers }){
   await step("export encrypted JSON", async () => {
     helpers.queueDialog("pass123");
     helpers.queueDialog("pass123");
+    await openDetails(page, "Backup + Import");
     const [download] = await Promise.all([
       page.waitForEvent("download"),
       page.click("#exportAltBtn")
@@ -58,6 +68,7 @@ export async function run({ page, step, assert, helpers }){
   });
 
   await step("export CSV", async () => {
+    await openDetails(page, "Backup + Import");
     const [download] = await Promise.all([
       page.waitForEvent("download"),
       page.click("#exportCsvBtn")
@@ -68,6 +79,7 @@ export async function run({ page, step, assert, helpers }){
   });
 
   await step("import plain export (merge)", async () => {
+    await openDetails(page, "Backup + Import");
     const [download] = await Promise.all([
       page.waitForEvent("download"),
       page.click("#exportBtn")
@@ -89,6 +101,7 @@ export async function run({ page, step, assert, helpers }){
     helpers.queueDialog("pass123");
     helpers.queueDialog("pass123");
     helpers.queueDialog("pass123");
+    await openDetails(page, "Backup + Import");
     const [download] = await Promise.all([
       page.waitForEvent("download"),
       page.click("#exportAltBtn")
@@ -115,6 +128,7 @@ export async function run({ page, step, assert, helpers }){
   });
 
   await step("verify snapshot count", async () => {
+    await openDetails(page, "Diagnostics");
     await page.waitForFunction(() => {
       const el = document.getElementById("diagSnapshotCount");
       return el && /\d+/.test(el.textContent || "");

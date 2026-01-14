@@ -1,12 +1,11 @@
 #!/usr/bin/env node
 // @ts-check
 
-import { spawn } from "child_process";
 import fs from "fs/promises";
 import net from "net";
 import path from "path";
 import { pathToFileURL } from "url";
-import http from "http";
+import { startTestServer } from "./test_server.mjs";
 
 const ROOT = process.cwd();
 const PORT = Number.parseInt(process.env.E2E_PORT || "5175", 10);
@@ -15,8 +14,40 @@ const FILTER = process.argv.find((arg) => arg.startsWith("--filter="))?.slice("-
 const TEST_DIR = path.join(ROOT, "tests", "e2e");
 const ARTIFACT_ROOT = path.join(ROOT, "artifacts", "e2e");
 const RUN_ID = new Date().toISOString().replace(/[:.]/g, "-");
-const LOG_DIR = path.join(ARTIFACT_ROOT, "logs");
+const RUN_DIR = path.join(ARTIFACT_ROOT, "runs", RUN_ID);
+const LOG_DIR = path.join(RUN_DIR, "logs");
 let LOG_FILE = "";
+let EVENT_SEQ = 0;
+const EVENT_SCHEMA = "e2e-event-v1";
+const RUN_MANIFEST = {
+  schema_version: "e2e-manifest-v1",
+  run_id: RUN_ID,
+  root: RUN_DIR,
+  started_at: new Date().toISOString(),
+  ended_at: "",
+  env: {
+    node: process.version,
+    platform: process.platform,
+    arch: process.arch
+  },
+  config: {
+    port: PORT,
+    headless: HEADLESS,
+    filter: FILTER
+  },
+  server: {
+    base_url: "",
+    ready: false
+  },
+  tests: [],
+  totals: {
+    passed: 0,
+    failed: 0,
+    skipped: 0,
+    total: 0
+  },
+  artifacts: []
+};
 
 function logHuman(message){
   process.stderr.write(`[e2e] ${message}\n`);
@@ -24,6 +55,8 @@ function logHuman(message){
 
 function logEvent(event){
   const record = {
+    seq: EVENT_SEQ++,
+    schema: EVENT_SCHEMA,
     run_id: RUN_ID,
     ts: event.ts || new Date().toISOString(),
     ...event
@@ -46,14 +79,11 @@ async function initLogFile(){
   logEvent({ event: "log_ready", path: LOG_FILE });
 }
 
-async function startServer(){
-  const args = ["-m", "http.server", String(PORT), "--directory", ROOT];
-  const proc = spawn("python3", args, { stdio: "ignore" });
-  return proc;
-}
-
-async function wait(ms){
-  return new Promise((resolve) => setTimeout(resolve, ms));
+async function writeManifest(){
+  const manifestPath = path.join(RUN_DIR, "manifest.json");
+  await ensureDir(RUN_DIR);
+  await fs.writeFile(manifestPath, JSON.stringify(RUN_MANIFEST, null, 2));
+  logEvent({ event: "manifest_write", path: manifestPath });
 }
 
 async function isPortAvailable(port){
@@ -73,28 +103,6 @@ async function isPortAvailable(port){
   });
 }
 
-async function waitForServer(baseUrl, { timeoutMs = 5000, intervalMs = 200 } = {}){
-  const end = Date.now() + timeoutMs;
-  const target = new URL(baseUrl);
-
-  while(Date.now() < end){
-    const ok = await new Promise((resolve) => {
-      const req = http.get(target, (res) => {
-        res.resume();
-        resolve(res.statusCode && res.statusCode >= 200);
-      });
-      req.on("error", () => resolve(false));
-      req.setTimeout(1000, () => {
-        req.destroy();
-        resolve(false);
-      });
-    });
-    if(ok) return true;
-    await wait(intervalMs);
-  }
-  return false;
-}
-
 async function findTests(){
   const entries = await fs.readdir(TEST_DIR, { withFileTypes: true });
   return entries
@@ -110,22 +118,33 @@ function assert(condition, label){
   }
 }
 
-function createStepLogger(testName){
+function createStepLogger(testName, onStep){
   return async (label, fn) => {
     const start = Date.now();
     logEvent({ event: "step_start", test: testName, label, ts: new Date(start).toISOString() });
+    if(typeof onStep === "function"){
+      onStep({ label, event: "start", ts: new Date(start).toISOString() });
+    }
     try{
       const result = await fn();
-      logEvent({ event: "step_end", test: testName, label, duration_ms: Date.now() - start });
+      const durationMs = Date.now() - start;
+      logEvent({ event: "step_end", test: testName, label, duration_ms: durationMs });
+      if(typeof onStep === "function"){
+        onStep({ label, event: "end", duration_ms: durationMs });
+      }
       return result;
     }catch(err){
+      const durationMs = Date.now() - start;
       logEvent({
         event: "step_error",
         test: testName,
         label,
-        duration_ms: Date.now() - start,
+        duration_ms: durationMs,
         message: err?.message || String(err)
       });
+      if(typeof onStep === "function"){
+        onStep({ label, event: "error", duration_ms: durationMs, message: err?.message || String(err) });
+      }
       throw err;
     }
   };
@@ -135,23 +154,64 @@ async function runTest({ browser, file, baseUrl }){
   const name = path.basename(file, ".e2e.mjs");
   const testStart = Date.now();
   logEvent({ event: "test_start", name, file, ts: new Date(testStart).toISOString() });
+  const testManifest = {
+    name,
+    file,
+    started_at: new Date(testStart).toISOString(),
+    ended_at: "",
+    status: "running",
+    artifacts: [],
+    steps: []
+  };
 
-  const videoDir = path.join(ARTIFACT_ROOT, "videos", name);
+  const videoDir = path.join(RUN_DIR, "videos", name);
   await ensureDir(videoDir);
 
+  const modUrl = pathToFileURL(file).toString();
+  const mod = await import(modUrl);
+  if(typeof mod.run !== "function"){
+    throw new Error(`Missing run() in ${file}`);
+  }
+  const serviceWorkers = mod.e2eConfig?.serviceWorkers || "block";
   const context = await browser.newContext({
     acceptDownloads: true,
-    recordVideo: { dir: videoDir }
+    recordVideo: { dir: videoDir },
+    serviceWorkers
   });
   const page = await context.newPage();
   const dialogQueue = [];
   await context.tracing.start({ screenshots: true, snapshots: true });
 
   page.on("console", (msg) => {
-    logEvent({ event: "browser_console", test: name, level: msg.type(), text: msg.text() });
+    logEvent({
+      event: "browser_console",
+      test: name,
+      level: msg.type(),
+      text: msg.text()
+    });
   });
   page.on("pageerror", (err) => {
     logEvent({ event: "browser_error", test: name, message: err?.message || String(err) });
+  });
+  page.on("requestfailed", (req) => {
+    const failure = req.failure();
+    logEvent({
+      event: "http_request_failed",
+      test: name,
+      url: req.url(),
+      method: req.method(),
+      failure: failure?.errorText || "unknown"
+    });
+  });
+  page.on("response", (res) => {
+    if(res.ok()) return;
+    logEvent({
+      event: "http_response_error",
+      test: name,
+      url: res.url(),
+      status: res.status(),
+      status_text: res.statusText()
+    });
   });
   page.on("dialog", async (dialog) => {
     const message = dialog.message();
@@ -173,7 +233,9 @@ async function runTest({ browser, file, baseUrl }){
     await dialog.accept();
   });
 
-  const step = createStepLogger(name);
+  const step = createStepLogger(name, (entry) => {
+    testManifest.steps.push(entry);
+  });
   const helpers = {
     baseUrl,
     queueDialog(value){
@@ -237,11 +299,6 @@ async function runTest({ browser, file, baseUrl }){
   let failure = null;
 
   try{
-    const modUrl = pathToFileURL(file).toString();
-    const mod = await import(modUrl);
-    if(typeof mod.run !== "function"){
-      throw new Error(`Missing run() in ${file}`);
-    }
     const result = await mod.run({
       page,
       context,
@@ -249,7 +306,14 @@ async function runTest({ browser, file, baseUrl }){
       assert,
       helpers,
       baseUrl,
-      logEvent
+      logEvent,
+      recordStep(label, meta = {}){
+        testManifest.steps.push({
+          label,
+          ts: new Date().toISOString(),
+          ...meta
+        });
+      }
     });
     if(result && result.status === "skip"){
       status = "skip";
@@ -261,21 +325,25 @@ async function runTest({ browser, file, baseUrl }){
   }
 
   if(status === "fail"){
-    const shotDir = path.join(ARTIFACT_ROOT, "screenshots");
+    const shotDir = path.join(RUN_DIR, "screenshots");
     await ensureDir(shotDir);
     const shot = path.join(shotDir, `${name}-${Date.now()}.png`);
     try{
       await page.screenshot({ path: shot, fullPage: true });
       logEvent({ event: "artifact", test: name, kind: "screenshot", path: shot });
+      testManifest.artifacts.push({ kind: "screenshot", path: shot });
+      RUN_MANIFEST.artifacts.push({ test: name, kind: "screenshot", path: shot });
     }catch(e){
       // ignore
     }
     try{
-      const traceDir = path.join(ARTIFACT_ROOT, "traces");
+      const traceDir = path.join(RUN_DIR, "traces");
       await ensureDir(traceDir);
       const tracePath = path.join(traceDir, `${name}-${Date.now()}.zip`);
       await context.tracing.stop({ path: tracePath });
       logEvent({ event: "artifact", test: name, kind: "trace", path: tracePath });
+      testManifest.artifacts.push({ kind: "trace", path: tracePath });
+      RUN_MANIFEST.artifacts.push({ test: name, kind: "trace", path: tracePath });
     }catch(e){
       // ignore
     }
@@ -296,6 +364,12 @@ async function runTest({ browser, file, baseUrl }){
     // ignore
   }
 
+  if(videoPath){
+    logEvent({ event: "artifact", test: name, kind: "video", path: videoPath });
+    testManifest.artifacts.push({ kind: "video", path: videoPath });
+    RUN_MANIFEST.artifacts.push({ test: name, kind: "video", path: videoPath });
+  }
+
   const durationMs = Date.now() - testStart;
   logEvent({
     event: "test_result",
@@ -306,6 +380,13 @@ async function runTest({ browser, file, baseUrl }){
     video: videoPath || undefined,
     reason: skipReason || undefined
   });
+  testManifest.status = status;
+  testManifest.ended_at = new Date().toISOString();
+  testManifest.duration_ms = durationMs;
+  if(skipReason){
+    testManifest.skip_reason = skipReason;
+  }
+  RUN_MANIFEST.tests.push(testManifest);
 
   if(status === "fail"){
     logEvent({
@@ -330,6 +411,7 @@ async function main(){
   }
 
   await ensureDir(ARTIFACT_ROOT);
+  await ensureDir(RUN_DIR);
   await initLogFile();
   logHuman(`Run ${RUN_ID} starting on port ${PORT} (headless=${HEADLESS})`);
 
@@ -340,24 +422,18 @@ async function main(){
     process.exit(1);
   }
 
-  const server = await startServer();
+  const { server, baseUrl } = await startTestServer({ port: PORT, root: ROOT });
   logEvent({ event: "server_start", port: PORT });
-  const baseUrl = `http://localhost:${PORT}/`;
-  const ready = await waitForServer(baseUrl, { timeoutMs: 8000, intervalMs: 250 });
-  if(!ready){
-    logEvent({ event: "server_error", message: "Server did not become ready in time." });
-    logHuman("Server did not become ready in time.");
-    server.kill();
-    process.exit(1);
-  }
   logEvent({ event: "server_ready", url: baseUrl });
+  RUN_MANIFEST.server.base_url = baseUrl;
+  RUN_MANIFEST.server.ready = true;
   let shuttingDown = false;
   const shutdown = (code, reason) => {
     if(shuttingDown) return;
     shuttingDown = true;
     logEvent({ event: "suite_abort", reason: reason || "signal" });
     try{
-      server.kill();
+      server.close();
     }catch(e){
       // ignore
     }
@@ -369,14 +445,26 @@ async function main(){
   const tests = await findTests();
   logEvent({ event: "suite_start", ts: new Date().toISOString(), test_count: tests.length, filter: FILTER });
   logHuman(`Found ${tests.length} e2e tests${FILTER ? ` (filter=${FILTER})` : ""}.`);
+  RUN_MANIFEST.totals.total = tests.length;
 
   if(tests.length === 0){
     logEvent({ event: "suite_empty", message: "No e2e tests found" });
-    server.kill();
+    server.close();
     process.exit(1);
   }
 
   const { chromium } = playwright;
+  RUN_MANIFEST.env.browser = {
+    name: "chromium",
+    version: typeof chromium.version === "function" ? chromium.version() : "unknown"
+  };
+  logEvent({
+    event: "suite_env",
+    node: RUN_MANIFEST.env.node,
+    platform: RUN_MANIFEST.env.platform,
+    arch: RUN_MANIFEST.env.arch,
+    browser: RUN_MANIFEST.env.browser
+  });
   const browser = await chromium.launch({ headless: HEADLESS });
 
   let passed = 0;
@@ -397,7 +485,7 @@ async function main(){
     }
   }finally{
     await browser.close();
-    server.kill();
+    server.close();
   }
 
   logEvent({
@@ -408,6 +496,9 @@ async function main(){
     skipped,
     total: tests.length
   });
+  RUN_MANIFEST.totals = { passed, failed, skipped, total: tests.length };
+  RUN_MANIFEST.ended_at = new Date().toISOString();
+  await writeManifest();
   logHuman(`Suite complete: ${passed} passed, ${failed} failed, ${skipped} skipped.`);
 
   process.exit(failed > 0 ? 1 : 0);

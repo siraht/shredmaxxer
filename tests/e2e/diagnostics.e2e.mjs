@@ -37,18 +37,28 @@ export async function run({ page, step, assert, helpers }){
 
   await step("check diagnostics fields", async () => {
     await openTab(page, "tabHistory");
+    await page.waitForSelector("#viewHistory:not(.hidden)");
+    await page.evaluate(() => {
+      const panels = Array.from(document.querySelectorAll("details"));
+      const panel = panels.find((el) => (el.querySelector("summary")?.textContent || "").includes("Diagnostics"));
+      if(panel) panel.open = true;
+    });
     await page.waitForFunction(() => {
       const mode = document.getElementById("diagStorageMode");
-      return mode && mode.textContent && mode.textContent !== "—";
+      if(!mode) return false;
+      const text = mode.textContent ? mode.textContent.trim() : "";
+      return text !== "" && text !== "—";
     });
-    const storageMode = await page.locator("#diagStorageMode").innerText();
-    const persist = await page.locator("#diagPersistStatus").innerText();
-    const schema = await page.locator("#diagSchemaVersion").innerText();
-    const appVersion = await page.locator("#diagAppVersion").innerText();
+    const storageMode = (await page.locator("#diagStorageMode").textContent())?.trim() || "";
+    const persist = (await page.locator("#diagPersistStatus").textContent())?.trim() || "";
+    const dstClamp = (await page.locator("#diagDstClamp").textContent())?.trim() || "";
+    const schema = (await page.locator("#diagSchemaVersion").textContent())?.trim() || "";
+    const appVersion = (await page.locator("#diagAppVersion").textContent())?.trim() || "";
     assert(storageMode.length > 0, "storage mode populated");
     assert(schema.length > 0, "schema version populated");
     assert(appVersion.length > 0, "app version populated");
     assert(persist.length > 0, "persist status populated");
+    assert(dstClamp.length > 0, "dst clamp populated");
   });
 
   await step("create snapshot and verify count", async () => {

@@ -2,6 +2,30 @@
 
 import { openTab } from "./helpers.mjs";
 
+async function setToggle(page, selector, value){
+  await page.evaluate(({ selector, value }) => {
+    const toggle = document.querySelector(selector);
+    if(!toggle){
+      throw new Error(`Missing toggle ${selector}`);
+    }
+    toggle.scrollIntoView({ block: "center" });
+    toggle.checked = !!value;
+    toggle.dispatchEvent(new Event("input", { bubbles: true }));
+    toggle.dispatchEvent(new Event("change", { bubbles: true }));
+  }, { selector, value });
+}
+
+async function clickControl(page, selector){
+  await page.evaluate(({ selector }) => {
+    const control = document.querySelector(selector);
+    if(!control){
+      throw new Error(`Missing control ${selector}`);
+    }
+    control.scrollIntoView({ block: "center" });
+    control.click();
+  }, { selector });
+}
+
 export async function run({ page, step, assert, helpers, context, logEvent }){
   await step("load app", async () => {
     await helpers.goto("/");
@@ -10,7 +34,7 @@ export async function run({ page, step, assert, helpers, context, logEvent }){
 
   await step("enable redaction", async () => {
     await openTab(page, "tabSettings");
-    await page.check("#privacyRedactToggle");
+    await setToggle(page, "#privacyRedactToggle", true);
     await openTab(page, "tabToday");
     const notesHidden = await page.locator("#notesBlock").isHidden();
     const bannerHidden = await page.locator("#redactionBanner").isHidden();
@@ -22,7 +46,7 @@ export async function run({ page, step, assert, helpers, context, logEvent }){
     await openTab(page, "tabSettings");
     helpers.queueDialog("1234");
     helpers.queueDialog("1234");
-    await page.click("#appLockSetBtn");
+    await clickControl(page, "#appLockSetBtn");
     await page.waitForFunction(() => {
       try{
         const hash = localStorage.getItem("shredmaxx_app_lock_hash");
@@ -35,7 +59,8 @@ export async function run({ page, step, assert, helpers, context, logEvent }){
   });
 
   await step("app lock blocks on reload", async () => {
-    await page.reload({ waitUntil: "load" });
+    await helpers.goto("/");
+    await page.waitForSelector(".segment");
     const overlayHidden = await page.locator("#appLockOverlay").isHidden();
     assert(!overlayHidden, "app lock overlay visible after reload");
     await page.fill("#appLockInput", "0000");
@@ -53,22 +78,23 @@ export async function run({ page, step, assert, helpers, context, logEvent }){
 
   await step("disable app lock with verification", async () => {
     await openTab(page, "tabSettings");
-    await page.uncheck("#privacyAppLockToggle");
+    await setToggle(page, "#privacyAppLockToggle", false);
     helpers.queueDialog("1234");
-    await page.click("#saveSettings");
+    await clickControl(page, "#saveSettings");
     await page.waitForTimeout(200);
     const checked = await page.locator("#privacyAppLockToggle").isChecked();
     assert(!checked, "app lock disabled");
   });
 
   await step("app lock stays disabled after reload", async () => {
-    await page.reload({ waitUntil: "load" });
+    await helpers.goto("/");
+    await page.waitForSelector(".segment");
     const overlayHidden = await page.locator("#appLockOverlay").isHidden();
     assert(overlayHidden, "app lock overlay stays hidden");
   });
 
   await step("privacy blur toggles on background", async () => {
-    await page.check("#privacyBlurToggle");
+    await setToggle(page, "#privacyBlurToggle", true);
     const other = await context.newPage();
     await other.goto("about:blank");
     await other.bringToFront();

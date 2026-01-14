@@ -40,6 +40,7 @@ export async function run({ page, step, assert, helpers }){
     await page.waitForTimeout(400);
 
     await page.reload({ waitUntil: "load" });
+    await page.waitForSelector(".segment");
     await openTab(page, "tabSettings");
     const reloaded = page.locator("#roster-proteins .roster-item").filter({
       has: page.locator('input[data-field="label"][value="Test Protein"]')
@@ -67,8 +68,12 @@ export async function run({ page, step, assert, helpers }){
     }).first();
     const pinBtn = row.locator('button[data-action="pin"]');
     await pinBtn.click();
-    const pinClass = await pinBtn.getAttribute("class");
-    assert(pinClass && pinClass.includes("active"), "pin button active");
+    await page.waitForFunction(() => {
+      const input = document.querySelector('#roster-proteins input[data-field="label"][value="Test Protein"]');
+      const item = input ? input.closest(".roster-item") : null;
+      const btn = item ? item.querySelector('button[data-action="pin"]') : null;
+      return !!(btn && btn.classList.contains("active"));
+    });
     const firstLabel = page.locator("#roster-proteins .roster-item input[data-field=\"label\"]").first();
     await page.waitForFunction(() => {
       const el = document.querySelector("#roster-proteins .roster-item input[data-field=\"label\"]");
@@ -78,8 +83,11 @@ export async function run({ page, step, assert, helpers }){
     assert(firstValue === "Test Protein", "pinned item sorted to top");
     const archiveBtn = row.locator('button[data-action="archive"]');
     await archiveBtn.click();
-    const rowClass = await row.getAttribute("class");
-    assert(rowClass && rowClass.includes("archived"), "roster row archived");
+    await page.waitForFunction(() => {
+      const input = document.querySelector('#roster-proteins input[data-field="label"][value="Test Protein"]');
+      const item = input ? input.closest(".roster-item") : null;
+      return !!(item && item.classList.contains("archived"));
+    });
   });
 
   await step("archived item hidden in chips", async () => {

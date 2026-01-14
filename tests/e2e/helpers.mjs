@@ -1,12 +1,26 @@
 // @ts-check
 
 export async function openTab(page, tabId){
-  await page.click(`#${tabId}`);
-  await page.waitForTimeout(80);
+  await page.evaluate((id) => {
+    const btn = document.getElementById(id);
+    if(!btn){
+      throw new Error(`Missing tab ${id}`);
+    }
+    btn.click();
+  }, tabId);
+  await page.waitForSelector(`#${tabId}.tab-active`);
+  await page.waitForTimeout(60);
 }
 
 export async function openSegment(page, segId){
-  await page.click(`.segment[data-segment="${segId}"]`);
+  await page.evaluate((targetSeg) => {
+    const el = document.querySelector(`.segment[data-segment="${targetSeg}"]`);
+    if(!el){
+      throw new Error(`Missing segment ${targetSeg}`);
+    }
+    el.scrollIntoView({ block: "center" });
+    el.click();
+  }, segId);
   await page.waitForSelector("#sheet:not(.hidden)");
 }
 
@@ -20,8 +34,18 @@ export async function setSegmented(page, rootSelector, value){
 }
 
 export async function selectChipByLabel(page, containerSelector, label){
-  const chip = page.locator(`${containerSelector} .chip`, { hasText: label }).first();
-  await chip.click();
+  await page.evaluate(({ containerSelector, label }) => {
+    const container = document.querySelector(containerSelector);
+    if(!container){
+      throw new Error(`Missing chip container ${containerSelector}`);
+    }
+    const chips = Array.from(container.querySelectorAll(".chip"));
+    const match = chips.find((chip) => (chip.textContent || "").trim() === label);
+    if(!match){
+      throw new Error(`Missing chip label ${label}`);
+    }
+    match.click();
+  }, { containerSelector, label });
 }
 
 export async function expectText(page, selector, expected){

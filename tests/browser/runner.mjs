@@ -1,5 +1,7 @@
 // @ts-check
 
+import { resetOpenDatabase } from "../../storage/idb.js";
+
 const output = document.getElementById("output");
 
 function logEvent(event){
@@ -24,6 +26,11 @@ function getQuery(){
 
 async function clearStorage(){
   try{
+    resetOpenDatabase();
+  }catch(e){
+    // ignore
+  }
+  try{
     localStorage.clear();
   }catch(e){
     // ignore
@@ -44,8 +51,11 @@ async function clearStorage(){
 
 const TESTS = [
   { name: "adapter_idb", path: "./adapter_idb.test.mjs" },
+  { name: "audit_log", path: "./audit_log.test.mjs" },
   { name: "encrypted_export", path: "./encrypted_export.test.mjs" },
   { name: "idb_stores", path: "./idb_stores.test.mjs" },
+  { name: "outbox", path: "./outbox.test.mjs" },
+  { name: "persist", path: "./persist.test.mjs" },
   { name: "snapshots", path: "./snapshots.test.mjs" }
 ];
 

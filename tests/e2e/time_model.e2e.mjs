@@ -44,10 +44,33 @@ export async function run({ page, step, assert, helpers }){
     await page.fill("#setLunchEnd", minutesToTime(lunchEnd));
     await page.fill("#setDinnerEnd", minutesToTime(dinnerEnd));
     await page.click("#saveSettings");
+    await page.waitForFunction(async ({ expectedStart, expectedEnd }) => {
+      if(typeof indexedDB === "undefined") return false;
+      return new Promise((resolve) => {
+        const req = indexedDB.open("shredmaxx_solar_log");
+        req.onerror = () => resolve(false);
+        req.onsuccess = () => {
+          try{
+            const db = req.result;
+            const tx = db.transaction("settings", "readonly");
+            const store = tx.objectStore("settings");
+            const getReq = store.get("settings");
+            getReq.onsuccess = () => {
+              const settings = getReq.result || {};
+              resolve(settings.dayStart === expectedStart && settings.dayEnd === expectedEnd);
+            };
+            getReq.onerror = () => resolve(false);
+          }catch(e){
+            resolve(false);
+          }
+        };
+      });
+    }, { expectedStart: minutesToTime(dayStart), expectedEnd: minutesToTime(dayEnd) }, { timeout: 8000 });
   });
 
   await step("verify settings persist", async () => {
     await page.reload({ waitUntil: "load" });
+    await page.waitForSelector(".segment");
     await openTab(page, "tabSettings");
     const startVal = await page.locator("#setDayStart").inputValue();
     const endVal = await page.locator("#setDayEnd").inputValue();

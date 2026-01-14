@@ -59,6 +59,40 @@ assert(dayInsights.some((insight) => insight.ruleId === "collision_today"), "col
 const trainingInsight = dayInsights.find((insight) => insight.ruleId === "training_starch_lunch");
 assert(trainingInsight && trainingInsight.message.startsWith("Strict phase:"), "phase prefix included");
 
+const starchLunchDay = {
+  trained: true,
+  segments: {
+    ftn: { ...baseSegment },
+    lunch: { ...baseSegment, carbs: ["c2"] },
+    dinner: { ...baseSegment },
+    late: { ...baseSegment }
+  }
+};
+const starchInsights = computeDayInsights({
+  day: starchLunchDay,
+  dateKey: "2026-01-13",
+  rosters,
+  settings: { phase: "" }
+});
+assert(!starchInsights.some((insight) => insight.ruleId === "training_starch_lunch"), "training starch suppressed when starch logged");
+
+const trainingNoLunchLogged = {
+  trained: true,
+  segments: {
+    ftn: { ...baseSegment },
+    lunch: { ...baseSegment, status: "unlogged", carbs: [], fats: [], proteins: [], micros: [] },
+    dinner: { ...baseSegment },
+    late: { ...baseSegment }
+  }
+};
+const noLunchInsights = computeDayInsights({
+  day: trainingNoLunchLogged,
+  dateKey: "2026-01-13",
+  rosters,
+  settings: { phase: "" }
+});
+assert(!noLunchInsights.some((insight) => insight.ruleId === "training_starch_lunch"), "training starch suppressed when lunch unlogged + empty");
+
 const seedOilDay = {
   segments: {
     ftn: { ...baseSegment },
@@ -74,6 +108,8 @@ const seedOilInsights = computeDayInsights({
   settings: { phase: "" }
 });
 assert(seedOilInsights.some((insight) => insight.ruleId === "seed_oil_hint"), "seed oil hint fires");
+const seedOilInsight = seedOilInsights.find((insight) => insight.ruleId === "seed_oil_hint");
+assert(seedOilInsight && seedOilInsight.message.includes("Seed oil"), "seed oil hint includes label");
 
 const unknownOilDay = {
   segments: {
@@ -131,6 +167,24 @@ const weekInsights = computeWeekInsights({
 });
 
 assert(weekInsights.some((insight) => insight.ruleId === "week_no_micros"), "week micros insight fires");
+const weekInsight = weekInsights.find((insight) => insight.ruleId === "week_no_micros");
+assert(weekInsight && weekInsight.message.includes("Try:"), "week micros insight suggests picks");
+
+const pinnedMicros = {
+  ...rosters,
+  micros: [
+    { id: "m2", label: "Kelp", tags: ["micro:sea"], pinned: true },
+    { id: "m3", label: "Parsley", tags: [], archived: true }
+  ]
+};
+const weekWithPinned = computeWeekInsights({
+  logs: { "2026-01-13": day },
+  rosters: pinnedMicros,
+  settings: { weekStart: 0 },
+  anchorDate: new Date("2026-01-13T12:00:00")
+});
+const pinnedInsight = weekWithPinned.find((insight) => insight.ruleId === "week_no_micros");
+assert(pinnedInsight && pinnedInsight.message.includes("Kelp"), "week micros suggestion prefers pinned");
 
 const weekWithMicros = computeWeekInsights({
   logs: { "2026-01-13": { ...day, segments: { ...day.segments, lunch: { ...day.segments.lunch, micros: ["m1"] } } } },
@@ -175,6 +229,11 @@ const mergedState = mergeInsightsState(
   { dismissed: { day: { "2026-01-13": { collision_today: "2026-02-01T00:00:00Z" } }, week: {} } }
 );
 assert(mergedState.dismissed.day["2026-01-13"].collision_today === "2026-02-01T00:00:00Z", "mergeInsights keeps newer");
+const mergedOlder = mergeInsightsState(
+  { dismissed: { day: { "2026-01-13": { collision_today: "2026-03-01T00:00:00Z" } }, week: {} } },
+  { dismissed: { day: { "2026-01-13": { collision_today: "2026-02-01T00:00:00Z" } }, week: {} } }
+);
+assert(mergedOlder.dismissed.day["2026-01-13"].collision_today === "2026-03-01T00:00:00Z", "mergeInsights keeps newest when incoming older");
 
 const dayOnly = computeInsights({ state, anchorDate: new Date("2026-01-13T12:00:00"), includeWeek: false });
 assert(dayOnly.every((insight) => insight.scope === "day"), "includeWeek false filters week insights");

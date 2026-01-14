@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 // @ts-check
 
-import { spawn } from "child_process";
 import path from "path";
 import fs from "fs/promises";
+import { startTestServer } from "./test_server.mjs";
 
 const ROOT = process.cwd();
 const PORT = Number.parseInt(process.env.BROWSER_TEST_PORT || "5174", 10);
@@ -18,16 +18,6 @@ async function ensureDir(dir){
   await fs.mkdir(dir, { recursive: true });
 }
 
-async function startServer(){
-  const args = ["-m", "http.server", String(PORT), "--directory", ROOT];
-  const proc = spawn("python3", args, { stdio: "ignore" });
-  return proc;
-}
-
-async function wait(ms){
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
 async function main(){
   let playwright;
   try{
@@ -37,8 +27,7 @@ async function main(){
     process.exit(1);
   }
 
-  const server = await startServer();
-  await wait(600);
+  const { server } = await startTestServer({ port: PORT, root: ROOT });
 
   const { chromium } = playwright;
   const browser = await chromium.launch({ headless: HEADLESS });
@@ -73,7 +62,7 @@ async function main(){
     await page.screenshot({ path: shot, fullPage: true });
     logEvent({ event: "suite_failure", reason: "timeout", screenshot: shot });
     await browser.close();
-    server.kill();
+    server.close();
     process.exit(1);
   }
 
@@ -88,7 +77,7 @@ async function main(){
 
   logEvent({ event: "suite_end", results });
   await browser.close();
-  server.kill();
+  server.close();
 
   process.exit(failed > 0 ? 1 : 0);
 }

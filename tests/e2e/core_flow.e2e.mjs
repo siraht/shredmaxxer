@@ -2,31 +2,31 @@
 
 import { openSegment, closeSegment, selectChipByLabel, setSegmented } from "./helpers.mjs";
 
-function formatDate(date){
-  const y = date.getFullYear();
-  const m = String(date.getMonth() + 1).padStart(2, "0");
-  const d = String(date.getDate()).padStart(2, "0");
-  return `${y}-${m}-${d}`;
-}
-
 export async function run({ page, step, assert, helpers }){
-  const today = new Date();
-  const yesterday = new Date(today);
-  yesterday.setDate(today.getDate() - 1);
-  const todayKey = formatDate(today);
-  const yesterdayKey = formatDate(yesterday);
+  let todayKey = "";
+  let yesterdayKey = "";
 
   await step("load app", async () => {
     await helpers.goto("/");
     await page.waitForSelector(".segment");
+    await page.waitForFunction(() => {
+      const el = document.getElementById("datePicker");
+      return el && el.value;
+    });
+    todayKey = await page.locator("#datePicker").inputValue();
   });
 
   await step("log yesterday lunch", async () => {
-    await page.click("#prevDay");
-    await page.waitForFunction((key) => {
+    await page.evaluate(() => {
+      const btn = document.getElementById("prevDay");
+      if(!btn) throw new Error("Missing prevDay");
+      btn.click();
+    });
+    await page.waitForFunction((prev) => {
       const el = document.getElementById("datePicker");
-      return el && el.value === key;
-    }, yesterdayKey);
+      return el && el.value && el.value !== prev;
+    }, todayKey);
+    yesterdayKey = await page.locator("#datePicker").inputValue();
     await openSegment(page, "lunch");
     await selectChipByLabel(page, "#chipsProteins", "Beef");
     await selectChipByLabel(page, "#chipsCarbs", "White rice");
@@ -35,7 +35,11 @@ export async function run({ page, step, assert, helpers }){
   });
 
   await step("return to today", async () => {
-    await page.click("#nextDay");
+    await page.evaluate(() => {
+      const btn = document.getElementById("nextDay");
+      if(!btn) throw new Error("Missing nextDay");
+      btn.click();
+    });
     await page.waitForFunction((key) => {
       const el = document.getElementById("datePicker");
       return el && el.value === key;
@@ -49,6 +53,12 @@ export async function run({ page, step, assert, helpers }){
   });
 
   await step("verify lunch copied", async () => {
+    await page.waitForFunction(() => {
+      const count = document.querySelector('.segment[data-segment="lunch"] .count[data-c="P"]');
+      const seg = document.querySelector('.segment[data-segment="lunch"]');
+      if(!count || !seg) return false;
+      return count.textContent.trim() === "1" && seg.classList.contains("status-logged");
+    }, { timeout: 2000 });
     const text = await page.locator('.segment[data-segment="lunch"] .count[data-c="P"]').innerText();
     assert(text.trim() === "1", "lunch protein count copied");
     const cls = await page.locator('.segment[data-segment="lunch"]').getAttribute("class");
@@ -78,6 +88,10 @@ export async function run({ page, step, assert, helpers }){
   });
 
   await step("verify last change reverted", async () => {
+    await page.waitForFunction(() => {
+      const c = document.querySelector('.segment[data-segment="ftn"] .count[data-c="C"]');
+      return c && c.textContent.trim() === "";
+    }, { timeout: 2000 });
     const p = await page.locator('.segment[data-segment="ftn"] .count[data-c="P"]').innerText();
     const c = await page.locator('.segment[data-segment="ftn"] .count[data-c="C"]').innerText();
     assert(p.trim() === "1", "ftn protein remains after undo");

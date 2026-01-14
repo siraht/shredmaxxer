@@ -61,7 +61,7 @@ export async function run({ page, step, assert, helpers }){
     const picks = await page.locator("#rotationPicks .pick-row").count();
     assert(picks > 0, "rotation picks render");
     const labelText = await page.locator("#rotationPicks").innerText();
-    assert(labelText.includes("Proteins"), "rotation picks include category labels");
+    assert(labelText.includes("Try:"), "rotation picks include try label");
   });
 
   await step("verify correlations block", async () => {

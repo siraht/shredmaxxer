@@ -1,5 +1,7 @@
 // @ts-check
 
+export const e2eConfig = { serviceWorkers: "allow" };
+
 export async function run({ page, step, assert, helpers, context }){
   await step("load app + wait for SW ready", async () => {
     await helpers.goto("/");
