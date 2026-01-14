@@ -550,6 +550,31 @@ function clearSegment(dateKey, segId){
   setDay(dateKey, day);
 }
 
+function copySegment(dateKey, targetSegId, sourceSeg){
+  if(!sourceSeg || !targetSegId) return;
+  const day = getDay(dateKey);
+  const target = day.segments[targetSegId];
+  if(!target) return;
+
+  const clone = deepClone(sourceSeg);
+  if(targetSegId !== "ftn"){
+    delete clone.ftnMode;
+  }
+
+  const next = { ...target, ...clone };
+  if(targetSegId !== "ftn"){
+    delete next.ftnMode;
+  }
+
+  day.segments[targetSegId] = next;
+  syncSegmentStatus(next, targetSegId);
+
+  const nowIso = new Date().toISOString();
+  touchSegment(next, nowIso);
+  touchDay(day, nowIso);
+  setDay(dateKey, day);
+}
+
 function setDayField(dateKey, field, value){
   const day = getDay(dateKey);
   if(day[field] === value) return;
@@ -795,6 +820,7 @@ const ui = createLegacyUI({
     setSegmentField,
     setSegmentStatus,
     clearSegment,
+    copySegment,
     setDayField,
     toggleBoolField,
     addRosterItem,
