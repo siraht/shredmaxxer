@@ -97,7 +97,7 @@ export function summarizeFtnModes(logs, dateKeys){
     summary.loggedDays += 1;
     const ftn = day.segments?.ftn;
     const mode = ftn?.ftnMode || "";
-    if(mode === "strict") summary.strict += 1;
+    if(mode === "ftn" || mode === "strict") summary.strict += 1;
     else if(mode === "lite") summary.lite += 1;
     else if(mode === "off") summary.off += 1;
     else summary.unset += 1;
