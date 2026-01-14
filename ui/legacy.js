@@ -209,6 +209,11 @@ export function createLegacyUI(ctx){
     return !!(hasItems || hasFlags || hasFtn);
   }
 
+  function dayHasDailyContent(day){
+    if(!day) return false;
+    return !!(day.movedBeforeLunch || day.trained || day.highFatDay || day.energy || day.mood || day.cravings || day.notes);
+  }
+
   function getSegmentTimestamp(seg, day){
     const ts = seg?.tsLast || seg?.tsFirst || day?.tsLast || day?.tsCreated;
     if(!ts) return null;
@@ -248,6 +253,77 @@ export function createLegacyUI(ctx){
     if(getCurrentSegmentId() === segId && !els.sheet.classList.contains("hidden")){
       openSegment(dateKey, segId);
     }
+  }
+
+  function parseCopySegments(input){
+    const raw = String(input || "").trim().toLowerCase();
+    if(!raw) return { segments: [], includeDaily: false };
+    if(raw === "all" || raw === "day"){
+      return { segments: ["ftn", "lunch", "dinner", "late"], includeDaily: true };
+    }
+    const map = {
+      ftn: "ftn",
+      lunch: "lunch",
+      dinner: "dinner",
+      late: "late"
+    };
+    const parts = raw.split(/[, ]+/).map(p => p.trim()).filter(Boolean);
+    const segments = [];
+    for(const part of parts){
+      const id = map[part];
+      if(id && !segments.includes(id)) segments.push(id);
+    }
+    return { segments, includeDaily: false };
+  }
+
+  function copyYesterdayIntoToday(){
+    if(typeof actions.copySegment !== "function") return;
+    const targetKey = yyyyMmDd(getCurrentDate());
+    const yesterdayKey = yyyyMmDd(addDays(getCurrentDate(), -1));
+    const state = getState();
+    if(!state.logs || !state.logs[yesterdayKey]){
+      undoState = null;
+      showUndoToast("No log for yesterday");
+      return;
+    }
+
+    const choice = prompt("Copy yesterday: type \"all\" or list segments (ftn, lunch, dinner, late).", "all");
+    if(choice === null) return;
+    const parsed = parseCopySegments(choice);
+    if(parsed.segments.length === 0){
+      undoState = null;
+      showUndoToast("No segments selected");
+      return;
+    }
+
+    const targetDay = getDay(targetKey);
+    const willOverwriteSegments = parsed.segments.some((segId) => segmentHasContent(targetDay.segments[segId], segId));
+    const willOverwriteDaily = parsed.includeDaily && dayHasDailyContent(targetDay);
+    if(willOverwriteSegments || willOverwriteDaily){
+      const ok = confirm("Copy will overwrite existing data for the selected segments. Continue?");
+      if(!ok) return;
+    }
+
+    const sourceDay = getDay(yesterdayKey);
+    captureUndo("Copied yesterday", () => {
+      for(const segId of parsed.segments){
+        const sourceSeg = sourceDay.segments?.[segId];
+        if(sourceSeg){
+          actions.copySegment(targetKey, segId, sourceSeg);
+        }
+      }
+      if(parsed.includeDaily){
+        actions.setDayField(targetKey, "movedBeforeLunch", !!sourceDay.movedBeforeLunch);
+        actions.setDayField(targetKey, "trained", !!sourceDay.trained);
+        actions.setDayField(targetKey, "highFatDay", !!sourceDay.highFatDay);
+        actions.setDayField(targetKey, "energy", sourceDay.energy || "");
+        actions.setDayField(targetKey, "mood", sourceDay.mood || "");
+        actions.setDayField(targetKey, "cravings", sourceDay.cravings || "");
+        actions.setDayField(targetKey, "notes", sourceDay.notes || "");
+      }
+    });
+
+    renderAll();
   }
 
   function renderTimeline(dateKey, day){
@@ -728,6 +804,11 @@ export function createLegacyUI(ctx){
       setDay(dateKey, day);
     }
 
+    if(els.copyYesterday){
+      const canCopy = actions.canCopyYesterday ? actions.canCopyYesterday(dateKey) : false;
+      els.copyYesterday.disabled = !canCopy;
+    }
+
     renderTimeline(dateKey, day);
     renderRituals(dateKey);
     renderScales(dateKey);
@@ -783,7 +864,7 @@ export function createLegacyUI(ctx){
       const ts = snap?.ts ? String(snap.ts) : "";
       const pretty = formatSnapshotTime(ts);
       return `
-        <div class="snapshot-item" data-snapshot-id="${escapeHtml(String(snap?.id || ""))}" data-snapshot-label="${escapeHtml(label)}" data-snapshot-time="${escapeHtml(pretty)}">
+        <div class="snapshot-item" data-snapshot-id="${escapeHtml(String(snap?.id || ""))}">
           <div class="snapshot-meta">
             <div class="snapshot-label">${escapeHtml(label)}</div>
             <div class="snapshot-time">${escapeHtml(pretty)}</div>
@@ -801,8 +882,8 @@ export function createLegacyUI(ctx){
         const row = btn.closest(".snapshot-item");
         const snapshotId = row?.dataset?.snapshotId;
         if(!snapshotId) return;
-        const label = row?.dataset?.snapshotLabel || "Snapshot";
-        const time = row?.dataset?.snapshotTime || "";
+        const label = row?.querySelector(".snapshot-label")?.textContent || "Snapshot";
+        const time = row?.querySelector(".snapshot-time")?.textContent || "";
         if(btn.dataset.action === "restore"){
           if(!confirm(`Restore snapshot \"${label}\" (${time})? This will replace current data.`)) return;
           try{
@@ -1298,6 +1379,28 @@ export function createLegacyUI(ctx){
         renderToday();
       }
     });
+    if(els.copyYesterday){
+      els.copyYesterday.addEventListener("click", copyYesterdayIntoToday);
+    }
+
+    if(els.copyYesterday){
+      els.copyYesterday.addEventListener("click", () => {
+        const dateKey = yyyyMmDd(getCurrentDate());
+        if(!actions.canCopyYesterday || !actions.copyYesterday){
+          showUndoToast("Copy not available");
+          return;
+        }
+        if(!actions.canCopyYesterday(dateKey)){
+          undoState = null;
+          showUndoToast("No logs yesterday");
+          return;
+        }
+        const ok = confirm("Copy yesterday's segments into this day? This will overwrite today's segments.");
+        if(!ok) return;
+        captureUndo("Copied yesterday", () => actions.copyYesterday(dateKey));
+        renderToday();
+      });
+    }
 
     // focus toggle
     els.toggleFocus.addEventListener("click", () => {
