@@ -125,11 +125,20 @@
  */
 
 /**
+ * @typedef {Object} InsightsState
+ * @property {{
+ *  day: Record<string, Record<string, string>>,
+ *  week: Record<string, Record<string, string>>
+ * }} dismissed
+ */
+
+/**
  * @typedef {Object} TrackerState
  * @property {4} version
  * @property {Meta} meta
  * @property {Settings} settings
  * @property {Rosters} rosters
+ * @property {InsightsState} insights
  * @property {Record<DateKey, DayLog>} logs
  */
 
