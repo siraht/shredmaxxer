@@ -68,6 +68,7 @@ export function getElements(){
     historyList: document.getElementById("historyList"),
     exportBtn: document.getElementById("exportBtn"),
     exportAltBtn: document.getElementById("exportAltBtn"),
+    exportCsvBtn: document.getElementById("exportCsvBtn"),
     importFile: document.getElementById("importFile"),
     importMode: document.getElementById("importMode"),
     importApply: document.getElementById("importApply"),

@@ -20,6 +20,7 @@ import { migrateV3ToV4 } from "./storage/migrate.js";
 import { APP_VERSION, buildMeta } from "./storage/meta.js";
 import { validateImportPayload as validateV4Import } from "./storage/validate.js";
 import { serializeExport } from "./storage/export.js";
+import { buildCsvExport } from "./storage/csv_export.js";
 import { encryptExport } from "./storage/encrypted_export.js";
 import { storageAdapter } from "./storage/adapter.js";
 
@@ -884,6 +885,18 @@ async function exportState(mode){
   URL.revokeObjectURL(a.href);
 }
 
+function exportCsv(){
+  const now = new Date();
+  const dateLabel = yyyyMmDd(now);
+  const csv = buildCsvExport(state);
+  const blob = new Blob([csv], { type: "text/csv" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = `shredmaxx_solar_log_${dateLabel}.csv`;
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
 async function importState(file){
   const text = await file.text();
   const obj = JSON.parse(text);
@@ -1058,6 +1071,7 @@ const ui = createLegacyUI({
     toggleRosterPinned: toggleRosterPinnedAction,
     toggleRosterArchived: toggleRosterArchivedAction,
     exportState,
+    exportCsv,
     importState,
     validateImportPayload,
     applyImportPayload,

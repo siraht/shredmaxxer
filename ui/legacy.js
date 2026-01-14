@@ -1965,6 +1965,13 @@ export function createLegacyUI(ctx){
         actions.exportState(mode || undefined);
       });
     }
+    if(els.exportCsvBtn){
+      els.exportCsvBtn.addEventListener("click", () => {
+        if(typeof actions.exportCsv === "function"){
+          actions.exportCsv();
+        }
+      });
+    }
     if(els.importMode){
       setSegmentedActive(els.importMode, "merge");
       els.importMode.addEventListener("click", (e) => {

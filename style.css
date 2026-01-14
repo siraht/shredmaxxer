@@ -283,6 +283,7 @@ body{
 
 .row{ display:flex; align-items:center; }
 .gap{ gap:10px; }
+.wrap{ flex-wrap: wrap; }
 .mt{ margin-top: 12px; }
 
 .tiny{ font-size: 12px; }

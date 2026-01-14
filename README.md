@@ -28,7 +28,8 @@ Local-first tracker for the Shredmaxxing protocol with a segmented day model (FT
 - Attempts **persistent storage** when supported (see Diagnostics).
 - **Snapshots** before import/migration; restore from Diagnostics.
 - **Merge‑safe import** and non‑destructive default behavior.
-- Optional hardening: **app lock**, **privacy blur**, **encrypted export** (AES‑GCM via WebCrypto).
+- Exports: **JSON**, **encrypted JSON** (AES‑GCM via WebCrypto), and **CSV** (per‑day rows).
+- Optional hardening: **app lock**, **privacy blur**.
 
 ## Review (v4)
 - Weekly Review 2.0: coverage matrix, rotation picks, and simple local‑only correlations.
@@ -64,6 +65,7 @@ Then open `http://localhost:5173/` and install as a PWA if your browser supports
 - Storage: add a segment, reload, confirm data persists; verify Diagnostics shows storage mode + persist status.
 - Snapshots: create a snapshot, restore it, then delete it; confirm Diagnostics updates snapshot count.
 - Import/export: export JSON, import as merge, then import as replace; verify logs/rosters expected.
+- CSV export: export CSV and open in a spreadsheet; verify per‑day rows render.
 - Copy yesterday: use “Copy yesterday” with a segment list and with “all”; verify overwrite confirm and undo.
 - Review: ensure weekly summary, issue chips, correlations, matrix, and rotation picks render.
 - Update flow: with service worker enabled, confirm update toast appears on new SW version.
