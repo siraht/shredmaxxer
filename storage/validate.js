@@ -108,9 +108,6 @@ function validateSettings(settings, errors, path){
     if(!isBoolean(settings.privacy.appLock)){
       pushError(errors, `${path}.privacy.appLock must be a boolean.`);
     }
-    if(settings.privacy.appLockHash !== undefined && !isString(settings.privacy.appLockHash)){
-      pushError(errors, `${path}.privacy.appLockHash must be a string if present.`);
-    }
     if(!isBoolean(settings.privacy.redactHome)){
       pushError(errors, `${path}.privacy.redactHome must be a boolean.`);
     }

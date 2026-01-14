@@ -23,7 +23,6 @@ export const DEFAULT_SETTINGS = {
   lastKnownLon: undefined,
   privacy: {
     appLock: false,
-    appLockHash: "",
     redactHome: false,
     exportEncryptedByDefault: false,
     blurOnBackground: false
@@ -66,11 +65,15 @@ function deriveSegmentStatus(seg){
 function mergeSettings(settings){
   const base = { ...DEFAULT_SETTINGS };
   if(settings && typeof settings === "object"){
-    return {
+    const merged = {
       ...base,
       ...settings,
       privacy: { ...base.privacy, ...(settings.privacy || {}) }
     };
+    if(merged.privacy && Object.prototype.hasOwnProperty.call(merged.privacy, "appLockHash")){
+      delete merged.privacy.appLockHash;
+    }
+    return merged;
   }
   return base;
 }

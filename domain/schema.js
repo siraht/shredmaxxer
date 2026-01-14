@@ -94,7 +94,6 @@
  * @property {""|"none"|"essential"|"advanced"} supplementsMode
  * @property {{
  *   appLock: boolean,
- *   appLockHash: string,
  *   redactHome: boolean,
  *   exportEncryptedByDefault: boolean,
  *   blurOnBackground: boolean

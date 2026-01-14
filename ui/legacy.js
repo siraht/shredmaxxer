@@ -48,6 +48,9 @@ export function createLegacyUI(ctx){
   let undoTimer = null;
   let reviewInsights = [];
   let todayNudgeInsight = null;
+  const APP_LOCK_HASH_KEY = "shredmaxx_app_lock_hash";
+  const APP_LOCK_SALT_KEY = "shredmaxx_app_lock_salt";
+  const appLockEncoder = (typeof TextEncoder !== "undefined") ? new TextEncoder() : null;
   let appLocked = false;
 
   function liftMinuteToTimeline(minute, start){
@@ -309,7 +312,7 @@ export function createLegacyUI(ctx){
   }
 
   function canUseCrypto(){
-    return !!(globalThis.crypto && crypto.subtle && crypto.getRandomValues);
+    return !!(appLockEncoder && globalThis.crypto && crypto.subtle && crypto.getRandomValues);
   }
 
   function bytesToBase64(bytes){
@@ -367,6 +370,7 @@ export function createLegacyUI(ctx){
   }
 
   async function hashPasscode(passcode, saltBytes){
+    if(!canUseCrypto()) return "";
     const passBytes = appLockEncoder.encode(String(passcode));
     const data = new Uint8Array(saltBytes.length + passBytes.length);
     data.set(saltBytes, 0);
@@ -399,6 +403,7 @@ export function createLegacyUI(ctx){
     const saltBytes = new Uint8Array(16);
     crypto.getRandomValues(saltBytes);
     const hash = await hashPasscode(passcode, saltBytes);
+    if(!hash) return false;
     return writeAppLockRecord(hash, bytesToBase64(saltBytes));
   }
 
@@ -442,6 +447,10 @@ export function createLegacyUI(ctx){
   }
 
   async function attemptUnlock(){
+    if(!canUseCrypto()){
+      setAppLockMessage("App lock requires WebCrypto.");
+      return;
+    }
     if(!els.appLockInput) return;
     const passcode = els.appLockInput.value || "";
     if(!passcode){
@@ -1140,42 +1149,6 @@ export function createLegacyUI(ctx){
     if(els.notesBlock) els.notesBlock.hidden = redacted;
     if(els.redactionBanner) els.redactionBanner.hidden = !redacted;
     document.body.classList.toggle("redact-home", redacted);
-  }
-
-  async function promptForPasscode(actionLabel){
-    const label = actionLabel ? `${actionLabel} passcode` : "Set passcode";
-    const passphrase = prompt(`${label}:`);
-    if(!passphrase) return null;
-    const confirmPass = prompt("Confirm passcode:");
-    if(confirmPass !== passphrase){
-      alert("Passcodes did not match.");
-      return null;
-    }
-    const hash = await hashPasscode(passphrase);
-    if(!hash){
-      alert("Passcode hashing unavailable in this browser.");
-      return null;
-    }
-    return hash;
-  }
-
-  async function attemptAppUnlock(){
-    if(!canUseCrypto()){
-      setAppLockMessage("WebCrypto unavailable.");
-      return;
-    }
-    const passphrase = els.appLockInput?.value || "";
-    if(!passphrase){
-      setAppLockMessage("Enter your passcode.");
-      return;
-    }
-    const ok = await verifyAppLockPasscode(passphrase);
-    if(!ok){
-      setAppLockMessage("Incorrect passcode.");
-      return;
-    }
-    appLocked = false;
-    hideAppLockOverlay();
   }
 
   function renderToday(){
@@ -1895,6 +1868,7 @@ export function createLegacyUI(ctx){
     if(els.appLockInput){
       els.appLockInput.addEventListener("keydown", (e) => {
         if(e.key === "Enter"){
+          e.preventDefault();
           attemptUnlock();
         }
       });
@@ -2096,12 +2070,16 @@ export function createLegacyUI(ctx){
           if(!ok) return;
         }
         const ok = await ensureAppLockPasscode();
-        if(ok){
-          if(els.privacyAppLockToggle && !els.privacyAppLockToggle.checked){
-            els.privacyAppLockToggle.checked = true;
-          }
-          showUndoToast(enabled ? "Passcode changed" : "Passcode set");
+        if(!ok) return;
+        if(els.privacyAppLockToggle && !els.privacyAppLockToggle.checked){
+          els.privacyAppLockToggle.checked = true;
         }
+        if(!isAppLockEnabled()){
+          captureUndo("App lock enabled", () => actions.updateSettings({ privacy: { appLock: true } }));
+          appLocked = false;
+          refreshAppLock();
+        }
+        showUndoToast(enabled ? "Passcode changed" : "Passcode set");
       });
     }
 
@@ -2124,10 +2102,15 @@ export function createLegacyUI(ctx){
           if(els.privacyAppLockToggle) els.privacyAppLockToggle.checked = false;
         }
       }else if(!nextAppLock && wasAppLock){
-        const ok = await verifyExistingPasscode("Enter passcode to disable app lock:");
-        if(!ok){
-          nextAppLock = true;
-          if(els.privacyAppLockToggle) els.privacyAppLockToggle.checked = true;
+        if(hasPasscode){
+          const ok = await verifyExistingPasscode("Enter passcode to disable app lock:");
+          if(!ok){
+            nextAppLock = true;
+            if(els.privacyAppLockToggle) els.privacyAppLockToggle.checked = true;
+          }else{
+            clearAppLockRecord();
+            appLocked = false;
+          }
         }else{
           clearAppLockRecord();
           appLocked = false;
@@ -2177,283 +2160,6 @@ export function createLegacyUI(ctx){
       els.sunAutoBtn.addEventListener("click", updateSunTimesFromLocation);
     }
 
-    if(els.privacyAppLockToggle){
-      els.privacyAppLockToggle.addEventListener("change", async () => {
-        const enabled = !!els.privacyAppLockToggle.checked;
-        if(enabled){
-          if(!hasAppLockSecret()){
-            const ok = await ensureAppLockPasscode();
-            if(!ok){
-              els.privacyAppLockToggle.checked = false;
-              return;
-            }
-          }
-          captureUndo("App lock enabled", () => actions.updateSettings({ privacy: { appLock: true } }));
-          appLocked = false;
-          refreshAppLock();
-          return;
-        }
-        captureUndo("App lock disabled", () => actions.updateSettings({ privacy: { appLock: false } }));
-        appLocked = false;
-        refreshAppLock();
-      });
-    }
-
-    if(els.appLockSetBtn){
-      els.appLockSetBtn.addEventListener("click", async () => {
-        if(hasAppLockSecret()){
-          const ok = await verifyExistingPasscode("Enter current passcode:");
-          if(!ok) return;
-        }
-        const stored = await ensureAppLockPasscode();
-        if(!stored) return;
-        captureUndo("Passcode updated", () => actions.updateSettings({ privacy: { appLock: true } }));
-        if(els.privacyAppLockToggle) els.privacyAppLockToggle.checked = true;
-        appLocked = false;
-        refreshAppLock();
-      });
-    }
-
-    if(els.privacyBlurToggle){
-      els.privacyBlurToggle.addEventListener("change", () => {
-        const enabled = !!els.privacyBlurToggle.checked;
-        captureUndo("Privacy blur updated", () => actions.updateSettings({ privacy: { blurOnBackground: enabled } }));
-        refreshPrivacyBlur();
-      });
-    }
-
-    if(els.privacyRedactToggle){
-      els.privacyRedactToggle.addEventListener("change", () => {
-        const enabled = !!els.privacyRedactToggle.checked;
-        captureUndo("Home redaction updated", () => actions.updateSettings({ privacy: { redactHome: enabled } }));
-        renderToday();
-      });
-    }
-
-    document.addEventListener("visibilitychange", refreshPrivacyBlur);
-
-    if(els.appLockSubmit){
-      els.appLockSubmit.addEventListener("click", attemptAppUnlock);
-    }
-    if(els.appLockInput){
-      els.appLockInput.addEventListener("keydown", (e) => {
-        if(e.key === "Enter"){
-          e.preventDefault();
-          attemptAppUnlock();
-        }
-      });
-    }
-
-    els.resetToday.addEventListener("click", () => {
-      const k = getActiveDateKey();
-      if(confirm("Reset today's logs?")){
-        captureUndo("Day reset", () => actions.resetDay(k));
-        setCurrentDate(dateFromKey(k));
-        renderAll();
-      }
-    });
-
-    // roster add buttons (Settings)
-    document.querySelectorAll('[data-roster]').forEach(btn => {
-      btn.addEventListener("click", () => {
-        const cat = btn.dataset.roster;
-        const name = prompt(`Add to ${cat}:`);
-        if(!name) return;
-        captureUndo("Roster item added", () => actions.addRosterItem(cat, name));
-        renderSettings();
-        renderToday();
-      });
-    });
-
-    wireRosterContainer("proteins", els.rosterProteins);
-    wireRosterContainer("carbs", els.rosterCarbs);
-    wireRosterContainer("fats", els.rosterFats);
-    wireRosterContainer("micros", els.rosterMicros);
-
-    // sheet close
-    els.sheetBackdrop.addEventListener("click", closeSegment);
-    els.closeSheet.addEventListener("click", closeSegment);
-    els.doneSegment.addEventListener("click", closeSegment);
-
-    // sheet clear
-    els.clearSegment.addEventListener("click", () => {
-      const currentSegmentId = getCurrentSegmentId();
-      if(!currentSegmentId) return;
-      const dateKey = yyyyMmDd(getCurrentDate());
-      captureUndo("Segment cleared", () => actions.clearSegment(dateKey, currentSegmentId));
-      openSegment(dateKey, currentSegmentId); // refresh UI
-      updateSegmentVisual(dateKey, currentSegmentId);
-    });
-
-    // sheet chips (event delegation)
-    const wireChipContainer = (container, category) => {
-      let longPressTimer = null;
-      let longPressFired = false;
-
-      const clearLongPress = () => {
-        if(longPressTimer) clearTimeout(longPressTimer);
-        longPressTimer = null;
-      };
-
-      container.addEventListener("pointerdown", (e) => {
-        if(e.button !== undefined && e.button !== 0) return;
-        const btn = e.target.closest(".chip");
-        if(!btn) return;
-        if(btn.dataset.add === "1") return;
-        const item = btn.dataset.item;
-        if(!item) return;
-        longPressFired = false;
-        clearLongPress();
-        longPressTimer = setTimeout(() => {
-          longPressFired = true;
-          btn.dataset.longpress = "1";
-          captureUndo("Roster pin toggled", () => actions.toggleRosterPinned(category, item));
-          renderSettings();
-          renderCategoryChips(category);
-        }, 520);
-      });
-
-      container.addEventListener("pointerup", clearLongPress);
-      container.addEventListener("pointerleave", clearLongPress);
-      container.addEventListener("pointercancel", clearLongPress);
-
-      container.addEventListener("click", (e) => {
-        const btn = e.target.closest(".chip");
-        if(!btn) return;
-        if(longPressFired || btn.dataset.longpress === "1"){
-          longPressFired = false;
-          btn.dataset.longpress = "";
-          return;
-        }
-        const dateKey = yyyyMmDd(getCurrentDate());
-        const currentSegmentId = getCurrentSegmentId();
-        if(!currentSegmentId) return;
-
-        if(btn.dataset.add === "1"){
-          const label = btn.dataset.label;
-          if(!label) return;
-          captureUndo("Item added", () => {
-            const entry = actions.addRosterItem(category, label);
-            if(entry && entry.id){
-              actions.toggleSegmentItem(dateKey, currentSegmentId, category, entry.id);
-            }
-          });
-          rosterSearch[category] = "";
-          const input = searchInputs[category];
-          if(input) input.value = "";
-          openSegment(dateKey, currentSegmentId);
-          renderSettings();
-          return;
-        }
-
-        const item = btn.dataset.item;
-        if(!item) return;
-        captureUndo("Segment updated", () => actions.toggleSegmentItem(dateKey, currentSegmentId, category, item));
-        // quick UI update
-        btn.classList.toggle("active");
-        refreshSegmentStatus(dateKey, currentSegmentId);
-        updateSegmentVisual(dateKey, currentSegmentId);
-        updateSheetHints(dateKey, currentSegmentId);
-      });
-    };
-
-    wireChipContainer(els.chipsProteins, "proteins");
-    wireChipContainer(els.chipsCarbs, "carbs");
-    wireChipContainer(els.chipsFats, "fats");
-    wireChipContainer(els.chipsMicros, "micros");
-
-    // FTN mode segmented
-    els.ftnModeSeg.addEventListener("click", (e) => {
-      const btn = e.target.closest(".seg-btn");
-      if(!btn) return;
-      const dateKey = yyyyMmDd(getCurrentDate());
-      setSegmentedActive(els.ftnModeSeg, btn.dataset.value);
-      captureUndo("FTN mode updated", () => actions.setSegmentField(dateKey, "ftn", "ftnMode", btn.dataset.value));
-      refreshSegmentStatus(dateKey, "ftn");
-      updateSegmentVisual(dateKey, "ftn");
-    });
-
-    // segment notes
-    els.segNotes.addEventListener("input", () => {
-      const currentSegmentId = getCurrentSegmentId();
-      if(!currentSegmentId) return;
-      const dateKey = yyyyMmDd(getCurrentDate());
-      clearTimeout(segNotesTimer);
-      segNotesTimer = setTimeout(() => {
-        captureUndo("Segment notes updated", () => actions.setSegmentField(dateKey, currentSegmentId, "notes", els.segNotes.value || ""));
-        refreshSegmentStatus(dateKey, currentSegmentId);
-        updateSegmentVisual(dateKey, currentSegmentId);
-      }, 320);
-    });
-
-    if(els.undoAction){
-      els.undoAction.addEventListener("click", () => {
-        if(!undoState) return;
-        actions.replaceState(undoState);
-        undoState = null;
-        hideUndoToast();
-        renderAll();
-      });
-    }
-  }
-
-  function startTicks(){
-    // tick (sun position + now marker)
-    setInterval(() => {
-      const dateKey = yyyyMmDd(getCurrentDate());
-      if(dateKey === getActiveDateKey()){
-        renderSolarArc(dateKey);
-        applyFutureFog(dateKey);
-      }
-    }, 20_000);
-  }
-
-  function init(){
-    wire();
-    setActiveTab("today");
-    renderAll();
-    refreshAppLock();
-    startTicks();
-  }
-
-  return {
-    renderAll,
-    renderToday,
-    renderHistory,
-    renderSettings,
-    renderTimeline,
-    renderSolarArc,
-    renderNowMarker,
-    openSegment,
-    closeSegment,
-    init
-  };
-}
-            els.privacyAppLockToggle.checked = false;
-            return;
-          }
-          captureUndo("App lock enabled", () => actions.updateSettings({ privacy: { appLock: true, appLockHash: nextHash } }));
-          appLockUnlocked = true;
-          refreshAppLock();
-          return;
-        }
-        captureUndo("App lock disabled", () => actions.updateSettings({ privacy: { appLock: false } }));
-        appLockUnlocked = true;
-        refreshAppLock();
-      });
-    }
-
-    if(els.appLockSetBtn){
-      els.appLockSetBtn.addEventListener("click", async () => {
-        const nextHash = await promptForPasscode("Set");
-        if(!nextHash) return;
-        captureUndo("Passcode updated", () => actions.updateSettings({ privacy: { appLock: true, appLockHash: nextHash } }));
-        if(els.privacyAppLockToggle) els.privacyAppLockToggle.checked = true;
-        appLockUnlocked = true;
-        refreshAppLock();
-      });
-    }
-
     if(els.privacyBlurToggle){
       els.privacyBlurToggle.addEventListener("change", () => {
         const enabled = !!els.privacyBlurToggle.checked;
@@ -2478,18 +2184,6 @@ export function createLegacyUI(ctx){
       refreshAppLock();
     });
 
-    if(els.appLockSubmit){
-      els.appLockSubmit.addEventListener("click", attemptAppUnlock);
-    }
-    if(els.appLockInput){
-      els.appLockInput.addEventListener("keydown", (e) => {
-        if(e.key === "Enter"){
-          e.preventDefault();
-          attemptAppUnlock();
-        }
-      });
-    }
-
     els.resetToday.addEventListener("click", () => {
       const k = getActiveDateKey();
       if(confirm("Reset today's logs?")){
@@ -2515,9 +2209,6 @@ export function createLegacyUI(ctx){
     wireRosterContainer("carbs", els.rosterCarbs);
     wireRosterContainer("fats", els.rosterFats);
     wireRosterContainer("micros", els.rosterMicros);
-    if(els.rosterSupplements){
-      wireRosterContainer("supplements", els.rosterSupplements);
-    }
 
     // sheet close
     els.sheetBackdrop.addEventListener("click", closeSegment);
@@ -2606,42 +2297,10 @@ export function createLegacyUI(ctx){
       });
     };
 
-    const searchInputs = {
-      proteins: els.searchProteins,
-      carbs: els.searchCarbs,
-      fats: els.searchFats,
-      micros: els.searchMicros
-    };
-
-    const chipContainers = {
-      proteins: els.chipsProteins,
-      carbs: els.chipsCarbs,
-      fats: els.chipsFats,
-      micros: els.chipsMicros
-    };
-
-    const renderCategoryChips = (category) => {
-      const dateKey = yyyyMmDd(getCurrentDate());
-      const currentSegmentId = getCurrentSegmentId();
-      if(!currentSegmentId) return;
-      const day = getDay(dateKey);
-      const seg = day.segments[currentSegmentId];
-      const roster = getState().rosters[category] || [];
-      renderChipSet(chipContainers[category], roster, seg[category], rosterSearch[category]);
-    };
-
     wireChipContainer(els.chipsProteins, "proteins");
     wireChipContainer(els.chipsCarbs, "carbs");
     wireChipContainer(els.chipsFats, "fats");
     wireChipContainer(els.chipsMicros, "micros");
-
-    Object.entries(searchInputs).forEach(([category, input]) => {
-      if(!input) return;
-      input.addEventListener("input", () => {
-        rosterSearch[category] = input.value || "";
-        renderCategoryChips(category);
-      });
-    });
 
     // sheet add item
     const addFromSheet = (category) => {
@@ -2766,9 +2425,9 @@ export function createLegacyUI(ctx){
 
   function init(){
     wire();
+    appLocked = isAppLockEnabled() && hasAppLockSecret();
     setActiveTab("today");
     renderAll();
-    appLocked = isAppLockEnabled() && hasAppLockSecret();
     refreshAppLock();
     startTicks();
   }

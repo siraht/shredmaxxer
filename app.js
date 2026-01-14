@@ -104,7 +104,6 @@ const DEFAULT_SETTINGS = {
   lastKnownLon: undefined,
   privacy: {
     appLock: false,
-    appLockHash: "",
     redactHome: false,
     exportEncryptedByDefault: false,
     blurOnBackground: false
@@ -128,6 +127,9 @@ function mergeSettings(base, next){
   const merged = { ...(base || {}), ...(next || {}) };
   if(base?.privacy || next?.privacy){
     merged.privacy = { ...(base?.privacy || {}), ...(next?.privacy || {}) };
+  }
+  if(merged.privacy && Object.prototype.hasOwnProperty.call(merged.privacy, "appLockHash")){
+    delete merged.privacy.appLockHash;
   }
   return merged;
 }

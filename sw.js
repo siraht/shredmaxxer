@@ -1,6 +1,6 @@
 /* App-shell cache with explicit versioning */
 const CACHE_PREFIX = "shredmaxx-app-shell";
-const CACHE_VERSION = "v4-0.5";
+const CACHE_VERSION = "v4-0.6";
 const CACHE_NAME = `${CACHE_PREFIX}-${CACHE_VERSION}`;
 const RUNTIME_CACHE = "shredmaxx-runtime-v1";
 
@@ -37,6 +37,7 @@ const ASSETS = [
   "./storage/persist.js",
   "./storage/meta.js",
   "./storage/export.js",
+  "./storage/encrypted_export.js",
   "./storage/import.js",
   "./storage/merge.js",
   "./storage/validate.js",
