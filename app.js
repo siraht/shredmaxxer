@@ -2,7 +2,7 @@
    - Offline-first, no backend
    - Tracks protocol segments: FTN / Lunch / Dinner / Late
    - Tracks food diversity inside each segment (protein / carbs / fats / accoutrements)
-   - Stores data in localStorage, with export/import for backup
+   - Stores data IndexedDB-first with localStorage fallback + export/import
 */
 
 import { getElements } from "./ui/elements.js";
@@ -10,8 +10,9 @@ import { createLegacyUI } from "./ui/legacy.js";
 import { normalizeTri } from "./domain/heuristics.js";
 import { ensureDayMeta, ensureSegmentMeta, touchDay, touchSegment } from "./domain/revisions.js";
 import { activeDayKey, addDaysLocal, dateToKey } from "./domain/time.js";
+import { createInsightsState, mergeInsightsState } from "./domain/insights.js";
 import { mergeDay, mergeRosters } from "./storage/merge.js";
-import { savePreImportSnapshot } from "./storage/snapshots.js";
+import { savePreImportSnapshot, saveSnapshotWithRetention } from "./storage/snapshots.js";
 import { createDefaultRosters, findDefaultRosterTemplate } from "./domain/roster_defaults.js";
 import { createRosterItem, findRosterItemByLabel, normalizeLabel } from "./domain/roster.js";
 import { setRosterLabel, setRosterAliases, setRosterTags, toggleRosterPinned, toggleRosterArchived } from "./domain/roster_edit.js";
@@ -191,6 +192,7 @@ function createDefaultState(){
     }),
     settings: deepClone(DEFAULT_SETTINGS),
     rosters: createDefaultRosters(now),
+    insights: createInsightsState(),
     logs: {}
   };
 }
@@ -318,6 +320,7 @@ function hydrateState(obj){
   const s = createDefaultState();
   if(obj.meta) s.meta = { ...s.meta, ...obj.meta };
   if(obj.settings) s.settings = { ...s.settings, ...obj.settings };
+  if(obj.insights) s.insights = mergeInsightsState(s.insights, obj.insights);
   if(obj.rosters){
     for(const k of ["proteins", "carbs", "fats", "micros"]){
       if(Array.isArray(obj.rosters[k])) s.rosters[k] = obj.rosters[k];
@@ -378,6 +381,9 @@ async function persistAll() {
   try {
     await storageAdapter.saveMeta(state.meta);
     await storageAdapter.saveSettings(state.settings);
+    if(storageAdapter.saveInsights){
+      await storageAdapter.saveInsights(state.insights);
+    }
     await storageAdapter.saveRosters(state.rosters);
     for (const [dateKey, dayLog] of Object.entries(state.logs)) {
       await storageAdapter.saveDay(dateKey, dayLog);
@@ -394,6 +400,36 @@ async function listSnapshots(){
   }catch(e){
     console.error("Failed to list snapshots:", e);
     return [];
+  }
+}
+
+async function createSnapshot(label){
+  const nextLabel = (typeof label === "string" && label.trim()) ? label.trim() : "Manual snapshot";
+  try{
+    const result = await saveSnapshotWithRetention({ label: nextLabel, state });
+    return result?.saved || null;
+  }catch(e){
+    console.error("Failed to create snapshot:", e);
+    throw e;
+  }
+}
+
+async function restoreSnapshot(snapshotId){
+  await storageAdapter.restoreSnapshot(snapshotId);
+  const loaded = await storageAdapter.loadState();
+  if(loaded){
+    state = hydrateState(loaded);
+  }else{
+    state = createDefaultState();
+  }
+}
+
+async function deleteSnapshot(snapshotId){
+  try{
+    await storageAdapter.deleteSnapshot(snapshotId);
+  }catch(e){
+    console.error("Failed to delete snapshot:", e);
+    throw e;
   }
 }
 
@@ -844,6 +880,9 @@ const ui = createLegacyUI({
     validateImportPayload,
     applyImportPayload,
     listSnapshots,
+    createSnapshot,
+    restoreSnapshot,
+    deleteSnapshot,
     replaceState,
     updateSettings,
     toggleFocusMode,

@@ -2,7 +2,7 @@
 
 import { idbAdapter, isIndexedDbAvailable, openDatabase } from "./idb.js";
 import { localAdapter } from "./local.js";
-import { checkPersistStatus } from "./persist.js";
+import { checkPersistStatus, requestPersist } from "./persist.js";
 import { APP_VERSION, buildMeta, isMetaEqual } from "./meta.js";
 
 let adapterPromise = null;
@@ -48,7 +48,15 @@ export const storageAdapter = {
   async loadState(){
     const adapter = await resolveAdapter();
     const state = await adapter.loadState();
-    const persistStatus = await checkPersistStatus();
+    let persistStatus = await requestPersist();
+    if(persistStatus === "unknown"){
+      persistStatus = await checkPersistStatus();
+    }else if(persistStatus === "denied"){
+      const checked = await checkPersistStatus();
+      if(checked === "granted"){
+        persistStatus = checked;
+      }
+    }
     const nextMeta = buildMeta(state?.meta, {
       storageMode: mode,
       persistStatus,
