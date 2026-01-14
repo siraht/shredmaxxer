@@ -723,7 +723,11 @@ export function createLegacyUI(ctx){
   function renderReview(){
     if(!els.coverageMatrix) return;
     const state = getState();
-    const weekStart = Number.isFinite(state.settings.weekStart) ? state.settings.weekStart : 0;
+    const rawWeekStart = state.settings.weekStart;
+    const parsedWeekStart = Number.isFinite(rawWeekStart) ? rawWeekStart : Number.parseInt(rawWeekStart, 10);
+    const weekStart = Number.isFinite(parsedWeekStart) && parsedWeekStart >= 0 && parsedWeekStart <= 6
+      ? parsedWeekStart
+      : 0;
     const anchor = getCurrentDate();
     const dateKeys = getWeekDateKeys(anchor, weekStart);
     const matrix = computeCoverageMatrix(state.logs, state.rosters, dateKeys);
