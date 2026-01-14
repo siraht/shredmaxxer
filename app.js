@@ -21,7 +21,7 @@ import { APP_VERSION, buildMeta } from "./storage/meta.js";
 import { validateImportPayload as validateV4Import } from "./storage/validate.js";
 import { serializeExport } from "./storage/export.js";
 import { buildCsvExport } from "./storage/csv_export.js";
-import { encryptExport } from "./storage/encrypted_export.js";
+import { encryptExport, decryptExport } from "./storage/encrypted_export.js";
 import { storageAdapter } from "./storage/adapter.js";
 
 const STORAGE_KEY = "shredmaxx_tracker_v4";
@@ -897,6 +897,18 @@ function exportCsv(){
   URL.revokeObjectURL(a.href);
 }
 
+async function decryptImportPayload(payload, passphrase){
+  if(!passphrase){
+    return { ok: false, error: "Passphrase required to decrypt import." };
+  }
+  try{
+    const decoded = await decryptExport(payload, passphrase);
+    return { ok: true, payload: decoded };
+  }catch(e){
+    return { ok: false, error: "Decrypt failed. Check passphrase and try again." };
+  }
+}
+
 async function importState(file){
   const text = await file.text();
   const obj = JSON.parse(text);
@@ -1073,6 +1085,7 @@ const ui = createLegacyUI({
     exportState,
     exportCsv,
     importState,
+    decryptImportPayload,
     validateImportPayload,
     applyImportPayload,
     listSnapshots,

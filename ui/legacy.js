@@ -2020,6 +2020,30 @@ export function createLegacyUI(ctx){
         return;
       }
 
+      if(payload && payload.type === "shredmaxx:encrypted"){
+        if(typeof actions.decryptImportPayload !== "function"){
+          setImportStatus("Import failed: encrypted payloads not supported here.", true);
+          clearPendingImport();
+          els.importFile.value = "";
+          return;
+        }
+        const passphrase = prompt("Enter passphrase to decrypt this import:");
+        if(!passphrase){
+          setImportStatus("Import canceled: passphrase required.", true);
+          clearPendingImport();
+          els.importFile.value = "";
+          return;
+        }
+        const decrypted = await actions.decryptImportPayload(payload, passphrase);
+        if(!decrypted || !decrypted.ok){
+          setImportStatus(decrypted?.error || "Import failed: decrypt error.", true);
+          clearPendingImport();
+          els.importFile.value = "";
+          return;
+        }
+        payload = decrypted.payload;
+      }
+
       const validation = actions.validateImportPayload(payload);
       if(!validation.ok){
         setImportStatus(validation.error || "Import failed: unsupported payload.", true);
