@@ -14,7 +14,7 @@ function buildRouter(root, routes, defaultRoute){
   const isValid = (route) => keys.includes(route);
 
   const getRouteFromHash = () => {
-    const raw = window.location.hash.replace(/^#/, "").replace(/^\\//, "");
+    const raw = window.location.hash.replace(/^#/, "").replace(/^\//, "");
     return isValid(raw) ? raw : defaultRoute;
   };
 

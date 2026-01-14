@@ -22,11 +22,29 @@ export function selectHistoryVm(state){
     return memo(dateKey, version, () => {
       const cached = dayIndex?.[dateKey];
       if(cached && isDayIndexFresh(cached, day)){
-        return { dateKey, counts: cached.counts, issues: cached.flags };
+        return {
+          dateKey,
+          counts: cached.counts,
+          issues: cached.flags,
+          signals: cached.signals || {},
+          ftnMode: cached.ftnMode || "",
+          lastEdited: cached.lastEdited || ""
+        };
       }
       const counts = mergeDayDiversity(day);
       const issues = countIssues(day, rosters);
-      return { dateKey, counts, issues };
+      return {
+        dateKey,
+        counts,
+        issues,
+        signals: {
+          energy: day?.energy || "",
+          mood: day?.mood || "",
+          cravings: day?.cravings || ""
+        },
+        ftnMode: day?.segments?.ftn?.ftnMode || "",
+        lastEdited: day?.tsLast || day?.tsCreated || ""
+      };
     });
   });
   return { items };

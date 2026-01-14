@@ -32,6 +32,14 @@ export function renderSettingsScreen({
     const enc = s.sync?.encryption === "e2ee" ? "e2ee" : "none";
     els.syncE2eeToggle.value = enc;
   }
+  if(els.syncMode){
+    const mode = s.sync?.mode === "off" ? "off" : "hosted";
+    els.syncMode.value = mode;
+  }
+  if(els.syncEndpoint){
+    const endpoint = s.sync?.endpoint || "";
+    els.syncEndpoint.value = endpoint && endpoint !== "/api/sync/v1" ? endpoint : "";
+  }
 
   const autoSun = (s.sunMode === "auto");
   els.setSunrise.disabled = autoSun;

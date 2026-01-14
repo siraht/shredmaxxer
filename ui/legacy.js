@@ -11,11 +11,12 @@ import { createSegmentEditor } from "./screens/segment_editor.js";
 import { wireSegmentEditor } from "./screens/segment_editor_wiring.js";
 import { renderChipSet } from "./components/chip_grid.js";
 import { renderRosterList as renderRosterListComponent } from "./components/roster_list.js";
-import { renderSnapshotList as renderSnapshotListComponent } from "./components/snapshot_list.js";
 import { renderAuditLog as renderAuditLogComponent } from "./components/audit_log.js";
+import { renderDiagnosticsPanel } from "./components/diagnostics.js";
 import { renderScales as renderScalesComponent } from "./components/scales.js";
 import { renderRituals as renderRitualsComponent } from "./components/rituals.js";
 import { renderSupplements as renderSupplementsComponent } from "./components/supplements.js";
+import { renderSyncStatus as renderSyncStatusComponent } from "./components/sync_status.js";
 import {
   renderTimeline as renderTimelineComponent,
   renderSolarArc as renderSolarArcComponent,
@@ -65,11 +66,25 @@ export function createLegacyUI(ctx){
   let notesDebounce = null;
   let segNotesTimer = null;
   let supplementsNotesDebounce = null;
+  const historyNotesTimers = new Map();
   let pendingImport = null;
   let pendingImportName = "";
-  let diagSnapshotSeq = 0;
-  let auditLogSeq = 0;
-  let auditLogCache = [];
+  let reviewAnchorDate = new Date();
+  const historyOpenDays = new Set();
+  const historyFilters = {
+    query: "",
+    flags: {
+      collision: false,
+      seedOil: false,
+      highFat: false,
+      notes: false
+    }
+  };
+  const diagState = {
+    snapshotSeq: 0,
+    auditSeq: 0,
+    auditLogCache: []
+  };
   let missingRosterItems = new Map();
   let rosterSearch = {
     proteins: "",
@@ -272,10 +287,11 @@ export function createLegacyUI(ctx){
   function applyPrivacyBlur(){
     if(!els.privacyBlurOverlay) return;
     const enabled = !!getState()?.settings?.privacy?.blurOnBackground;
+    const reduceEffects = !!getState()?.settings?.ui?.reduceEffects;
     const isHidden = (typeof document.visibilityState === "string")
       ? document.visibilityState !== "visible"
       : !!document.hidden;
-    const shouldShow = enabled && isHidden;
+    const shouldShow = enabled && isHidden && !reduceEffects;
     els.privacyBlurOverlay.classList.toggle("hidden", !shouldShow);
     els.privacyBlurOverlay.setAttribute("aria-hidden", shouldShow ? "false" : "true");
   }
@@ -654,6 +670,7 @@ export function createLegacyUI(ctx){
     if(!els.currentTime) return;
     if(dateKey !== getActiveDateKey()){
       els.currentTime.textContent = "—";
+      if(els.currentTz) els.currentTz.textContent = "—";
       return;
     }
     const now = new Date();
@@ -662,6 +679,14 @@ export function createLegacyUI(ctx){
     const period = rawHours >= 12 ? "PM" : "AM";
     const hours = rawHours % 12 || 12;
     els.currentTime.innerHTML = `${hours}:${mins} <span class="time-period">${period}</span>`;
+    if(els.currentTz){
+      let tzLabel = "";
+      if(typeof Intl !== "undefined" && Intl.DateTimeFormat){
+        const parts = new Intl.DateTimeFormat([], { timeZoneName: "short" }).formatToParts(now);
+        tzLabel = parts.find((part) => part.type === "timeZoneName")?.value || "";
+      }
+      els.currentTz.textContent = tzLabel || "Local";
+    }
   }
 
   function renderNowMarker(dateKey){
@@ -753,7 +778,12 @@ export function createLegacyUI(ctx){
 
   // --- Sheet (segment editor) ---
   function openSegment(dateKey, segId){
+    const t0 = (typeof performance !== "undefined" && performance.now) ? performance.now() : 0;
     segmentEditor.openSegment(dateKey, segId);
+    if(t0){
+      const dt = (typeof performance !== "undefined" && performance.now) ? performance.now() - t0 : 0;
+      logPerf("sheet_open", dt, { dateKey, segId });
+    }
   }
 
   function closeSegment(){
@@ -819,11 +849,45 @@ export function createLegacyUI(ctx){
     document.body.classList.toggle("redact-home", redacted);
   }
 
+  function applyUiPreferences(){
+    const reduce = !!getState().settings?.ui?.reduceEffects;
+    document.body.classList.toggle("reduce-effects", reduce);
+    if(reduce){
+      document.body.dataset.reduceEffects = "true";
+    }else{
+      delete document.body.dataset.reduceEffects;
+    }
+  }
+
+  const PERF_LOG_KEY = "shredmaxx_perf_log";
+  function isPerfLogging(){
+    try{
+      return typeof localStorage !== "undefined" && localStorage.getItem(PERF_LOG_KEY) === "1";
+    }catch(e){
+      return false;
+    }
+  }
+  function setPerfLogging(enabled){
+    try{
+      if(typeof localStorage === "undefined") return;
+      localStorage.setItem(PERF_LOG_KEY, enabled ? "1" : "0");
+    }catch(e){
+      // ignore storage failures
+    }
+  }
+  function logPerf(label, duration, detail){
+    if(!isPerfLogging()) return;
+    if(typeof actions.logAuditEvent !== "function") return;
+    const ms = Number.isFinite(duration) ? duration : 0;
+    actions.logAuditEvent("perf", `${label} ${ms.toFixed(1)}ms`, "info", { label, duration: ms, ...(detail || {}) });
+  }
+
   function renderToday(){
     const dateKey = yyyyMmDd(getCurrentDate());
     els.datePicker.value = dateKey;
 
     const state = getState();
+    const t0 = (typeof performance !== "undefined" && performance.now) ? performance.now() : 0;
     const result = renderTodayScreen({
       els,
       state,
@@ -840,188 +904,54 @@ export function createLegacyUI(ctx){
       applyHomeRedaction
     });
     todayNudgeInsight = result?.todayNudgeInsight || null;
+    if(t0){
+      const dt = (typeof performance !== "undefined" && performance.now) ? performance.now() - t0 : 0;
+      logPerf("render_today", dt, { dateKey });
+    }
   }
 
   function renderDiagnostics(){
-    if(!els.diagStorageMode) return;
     const state = getState();
-    const meta = state.meta || {};
-    const setValue = (el, value) => {
-      if(!el) return;
-      el.textContent = value || "—";
-    };
-    setValue(els.diagStorageMode, meta.storageMode);
-    setValue(els.diagPersistStatus, meta.persistStatus);
-    if(els.diagSafeMode){
-      const safeMode = meta?.integrity?.safeMode ? "ON" : "OFF";
-      setValue(els.diagSafeMode, safeMode);
-    }
-    setValue(els.diagSchemaVersion, String(meta.version || state.version || ""));
-    setValue(els.diagAppVersion, meta.appVersion);
-    setValue(els.diagInstallId, meta.installId);
-    if(els.diagDstClamp){
-      const dst = meta?.integrity?.dstClamp;
-      let clampLabel = "";
-      if(dst && (dst.applied || dst.ambiguous)){
-        const reason = dst.ambiguous ? "ambiguous time" : "gap";
-        clampLabel = `DST clamp applied (${reason})`;
-      }else if(!dst){
-        const settings = state.settings || {};
-        const now = new Date();
-        const boundaryKeys = ["dayStart", "dayEnd", "ftnEnd", "lunchEnd", "dinnerEnd"];
-        for(const key of boundaryKeys){
-          const minutes = parseTimeToMinutes(settings[key]);
-          const clamp = clampLocalTime(now, minutes);
-          if(clamp.clamped || clamp.reason === "ambiguous"){
-            const reason = clamp.reason === "ambiguous" ? "ambiguous time" : "gap";
-            clampLabel = `DST clamp applied (${reason})`;
-            break;
-          }
+    const result = renderDiagnosticsPanel({
+      els,
+      state,
+      actions,
+      parseTimeToMinutes,
+      clampLocalTime,
+      formatSnapshotTime,
+      escapeHtml,
+      diagState,
+      onRestoreSnapshot: async (snapshotId) => {
+        try{
+          undoState = null;
+          await actions.restoreSnapshot(snapshotId);
+          renderAll();
+          showUndoToast("Snapshot restored");
+        }catch(e){
+          showUndoToast("Snapshot restore failed");
+        }
+      },
+      onDeleteSnapshot: async (snapshotId) => {
+        try{
+          await actions.deleteSnapshot(snapshotId);
+          renderDiagnostics();
+          showUndoToast("Snapshot deleted");
+        }catch(e){
+          showUndoToast("Snapshot delete failed");
         }
       }
-      setValue(els.diagDstClamp, clampLabel);
-    }
-    if(els.diagSnapshotCount || els.snapshotList){
-      const requestId = ++diagSnapshotSeq;
-      if(els.diagSnapshotCount){
-        setValue(els.diagSnapshotCount, "...");
-      }
-      if(els.snapshotList){
-        els.snapshotList.innerHTML = `<div class="tiny muted">Loading…</div>`;
-      }
-      if(typeof actions.listSnapshots === "function"){
-        actions.listSnapshots()
-          .then((list) => {
-            if(requestId !== diagSnapshotSeq) return;
-            const items = Array.isArray(list) ? list : [];
-            if(els.diagSnapshotCount){
-              setValue(els.diagSnapshotCount, String(items.length));
-            }
-            renderSnapshotListComponent({
-              container: els.snapshotList,
-              list: items,
-              formatSnapshotTime,
-              escapeHtml,
-              onRestore: async (snapshotId) => {
-                try{
-                  undoState = null;
-                  await actions.restoreSnapshot(snapshotId);
-                  renderAll();
-                  showUndoToast("Snapshot restored");
-                }catch(e){
-                  showUndoToast("Snapshot restore failed");
-                }
-              },
-              onDelete: async (snapshotId) => {
-                try{
-                  await actions.deleteSnapshot(snapshotId);
-                  renderDiagnostics();
-                  showUndoToast("Snapshot deleted");
-                }catch(e){
-                  showUndoToast("Snapshot delete failed");
-                }
-              }
-            });
-          })
-          .catch(() => {
-            if(requestId !== diagSnapshotSeq) return;
-            if(els.diagSnapshotCount){
-              setValue(els.diagSnapshotCount, "—");
-            }
-            renderSnapshotListComponent({
-              container: els.snapshotList,
-              list: [],
-              formatSnapshotTime,
-              escapeHtml,
-              onRestore: null,
-              onDelete: null
-            });
-          });
-      }else{
-        if(els.diagSnapshotCount){
-          setValue(els.diagSnapshotCount, "—");
-        }
-        renderSnapshotListComponent({
-          container: els.snapshotList,
-          list: [],
-          formatSnapshotTime,
-          escapeHtml,
-          onRestore: null,
-          onDelete: null
-        });
-      }
-    }
-
-    if(els.auditLogList){
-      const requestId = ++auditLogSeq;
-      els.auditLogList.innerHTML = `<div class="tiny muted">Loading…</div>`;
-      if(typeof actions.listAuditLog === "function"){
-        actions.listAuditLog()
-          .then((list) => {
-            if(requestId !== auditLogSeq) return;
-            auditLogCache = Array.isArray(list) ? list : [];
-            renderAuditLogComponent({
-              container: els.auditLogList,
-              list: auditLogCache,
-              filter: els.auditFilter ? els.auditFilter.value : "all",
-              formatSnapshotTime,
-              escapeHtml
-            });
-          })
-          .catch(() => {
-            if(requestId !== auditLogSeq) return;
-            auditLogCache = [];
-            renderAuditLogComponent({
-              container: els.auditLogList,
-              list: [],
-              filter: els.auditFilter ? els.auditFilter.value : "all",
-              formatSnapshotTime,
-              escapeHtml
-            });
-          });
-      }else{
-        auditLogCache = [];
-        renderAuditLogComponent({
-          container: els.auditLogList,
-          list: [],
-          filter: els.auditFilter ? els.auditFilter.value : "all",
-          formatSnapshotTime,
-          escapeHtml
-        });
-      }
-    }
-
-    if(els.diagMissingItems){
-      missingRosterItems = collectMissingRosterItems(state.rosters, state.logs);
-      setValue(els.diagMissingItems, String(missingRosterItems.size));
-      els.diagMissingItems.title = missingRosterItems.size ? "Click to repair missing roster IDs" : "";
+    });
+    missingRosterItems = result?.missingRosterItems || new Map();
+    if(els.perfLogToggle){
+      els.perfLogToggle.checked = isPerfLogging();
     }
   }
 
   function renderSyncStatus(){
-    if(!els.syncStatus) return;
-    const sync = getState()?.meta?.sync || {};
-    let label = "Offline";
-    if(sync.status === "syncing") label = "Syncing";
-    else if(sync.status === "idle" || sync.status === "") label = "Idle";
-    else if(sync.status === "error") label = "Error";
-    else if(sync.status === "offline") label = "Offline";
-    const pending = Number.isFinite(sync.pendingOutbox) ? sync.pendingOutbox : 0;
-    els.syncStatus.textContent = pending > 0 ? `${label} • ${pending}` : label;
-    if(els.outboxBadge){
-      if(pending > 0){
-        els.outboxBadge.hidden = false;
-        els.outboxBadge.textContent = String(pending);
-      }else{
-        els.outboxBadge.hidden = true;
-        els.outboxBadge.textContent = "0";
-      }
-    }
-    if(sync.lastSyncTs){
-      els.syncStatus.title = `Last sync: ${formatSnapshotTime(sync.lastSyncTs)}`;
-    }else{
-      els.syncStatus.title = "";
-    }
+    const state = getState();
+    const sync = state?.meta?.sync || {};
+    const mode = state?.settings?.sync?.mode || "hosted";
+    renderSyncStatusComponent({ els, sync, mode });
   }
 
   function renderHistory(){
@@ -1030,13 +960,9 @@ export function createLegacyUI(ctx){
       els,
       state,
       escapeHtml,
-      onSelectDay: (k) => {
-        if(!k) return;
-        setCurrentDate(new Date(k + "T12:00:00"));
-        setActiveTab("today");
-        markViewDirty("today");
-        queueRender("main");
-      }
+      formatSnapshotTime,
+      openDays: historyOpenDays,
+      filters: historyFilters
     });
 
     renderDiagnostics();
@@ -1044,12 +970,16 @@ export function createLegacyUI(ctx){
 
   function renderReview(){
     const state = getState();
-    const anchorDate = getCurrentDate();
+    const anchorDate = reviewAnchorDate || getCurrentDate();
+    const t0 = (typeof performance !== "undefined" && performance.now) ? performance.now() : 0;
     const result = renderReviewScreen({
       els,
       state,
       anchorDate,
       escapeHtml,
+      onPerf: (label, duration, detail) => {
+        logPerf(`review_${label}`, duration, detail);
+      },
       onMatrixSelect: (key, col) => {
         setCurrentDate(new Date(key + "T12:00:00"));
         setActiveTab("today");
@@ -1064,6 +994,10 @@ export function createLegacyUI(ctx){
       }
     });
     reviewInsights = Array.isArray(result?.insights) ? result.insights : [];
+    if(t0){
+      const dt = (typeof performance !== "undefined" && performance.now) ? performance.now() - t0 : 0;
+      logPerf("render_review", dt, { anchor: anchorDate instanceof Date ? anchorDate.toISOString() : "" });
+    }
   }
 
   function findSegmentForMatrixCell(day, col){
@@ -1170,6 +1104,14 @@ export function createLegacyUI(ctx){
         return;
       }
 
+      if(field === "icon"){
+        const next = input.value || "";
+        schedule(`${itemId}:${field}`, () => {
+          captureUndo("Roster icon updated", () => actions.updateRosterIcon(category, itemId, next));
+        });
+        return;
+      }
+
       if(field === "tags"){
         const list = parseCommaList(input.value);
         schedule(`${itemId}:${field}`, () => {
@@ -1230,17 +1172,48 @@ export function createLegacyUI(ctx){
   }
 
   function renderSyncControls(){
+    const syncSettings = getState()?.settings?.sync || {};
+    const mode = syncSettings.mode === "off" ? "off" : "hosted";
     if(els.syncE2eeToggle){
-      const enc = getState()?.settings?.sync?.encryption === "e2ee" ? "e2ee" : "none";
+      const enc = syncSettings.encryption === "e2ee" ? "e2ee" : "none";
       els.syncE2eeToggle.value = enc;
+    }
+    if(els.syncMode){
+      els.syncMode.value = mode;
+    }
+    if(els.syncEndpoint){
+      const endpoint = syncSettings.endpoint || "";
+      els.syncEndpoint.value = endpoint && endpoint !== "/api/sync/v1" ? endpoint : "";
+    }
+    if(els.syncNowBtn){
+      els.syncNowBtn.disabled = mode !== "hosted";
+    }
+    if(els.syncStatusLine){
+      const syncMeta = getState()?.meta?.sync || {};
+      let label = "—";
+      if(mode === "off"){
+        label = "Paused";
+      }else if(syncMeta.status === "syncing"){
+        label = "Syncing";
+      }else if(syncMeta.status === "idle" || syncMeta.status === ""){
+        label = "Idle";
+      }else if(syncMeta.status === "error"){
+        label = "Error";
+      }else if(syncMeta.status === "offline"){
+        label = "Offline";
+      }
+      const pending = Number.isFinite(syncMeta.pendingOutbox) ? syncMeta.pendingOutbox : 0;
+      const suffix = pending > 0 ? ` • ${pending} pending` : "";
+      els.syncStatusLine.textContent = `Status: ${label}${suffix}`;
     }
     if(els.syncLinkStatus && typeof actions.getSyncLink === "function"){
       actions.getSyncLink()
         .then((link) => {
           if(!els.syncLinkStatus) return;
-          els.syncLinkStatus.textContent = link
+          const base = link
             ? "Sync link ready. Keep it private."
             : "No sync link configured.";
+          els.syncLinkStatus.textContent = (mode === "off") ? `Sync paused. ${base}` : base;
         })
         .catch(() => {
           if(!els.syncLinkStatus) return;
@@ -1261,6 +1234,8 @@ export function createLegacyUI(ctx){
   }
 
   function renderActive(){
+    applyUiPreferences();
+    applyHomeRedaction();
     renderSyncStatus();
     if(activeTab === "history"){
       if(dirtyViews.has("history")){
@@ -1347,15 +1322,177 @@ export function createLegacyUI(ctx){
       });
     }
 
+    const shiftReviewWeek = (delta) => {
+      const base = reviewAnchorDate || getCurrentDate();
+      reviewAnchorDate = addDays(base, delta * 7);
+      markViewDirty("review");
+      queueRender("main");
+    };
+    if(els.reviewPrevWeek){
+      els.reviewPrevWeek.addEventListener("click", () => shiftReviewWeek(-1));
+    }
+    if(els.reviewNextWeek){
+      els.reviewNextWeek.addEventListener("click", () => shiftReviewWeek(1));
+    }
+    if(els.reviewTodayWeek){
+      els.reviewTodayWeek.addEventListener("click", () => {
+        reviewAnchorDate = new Date();
+        markViewDirty("review");
+        queueRender("main");
+      });
+    }
+
     if(els.auditFilter){
       els.auditFilter.addEventListener("change", () => {
         renderAuditLogComponent({
           container: els.auditLogList,
-          list: auditLogCache,
+          list: diagState.auditLogCache,
           filter: els.auditFilter ? els.auditFilter.value : "all",
           formatSnapshotTime,
           escapeHtml
         });
+      });
+    }
+    if(els.perfLogToggle){
+      els.perfLogToggle.addEventListener("change", () => {
+        const enabled = !!els.perfLogToggle.checked;
+        setPerfLogging(enabled);
+        showUndoToast(enabled ? "Perf logging enabled" : "Perf logging disabled");
+      });
+    }
+
+    if(els.historySearch){
+      historyFilters.query = els.historySearch.value || "";
+      els.historySearch.addEventListener("input", () => {
+        historyFilters.query = els.historySearch.value || "";
+        markViewDirty("history");
+        queueRender("main");
+      });
+    }
+    if(els.historyFilters){
+      els.historyFilters.addEventListener("click", (e) => {
+        const btn = e.target.closest("[data-filter]");
+        if(!btn) return;
+        const key = btn.dataset.filter || "";
+        if(!key) return;
+        const next = !historyFilters.flags[key];
+        historyFilters.flags[key] = next;
+        btn.classList.toggle("active", next);
+        markViewDirty("history");
+        queueRender("main");
+      });
+    }
+    if(els.historyList){
+      els.historyList.addEventListener("click", (e) => {
+        const actionEl = e.target.closest("[data-action]");
+        if(!actionEl) return;
+        const action = actionEl.dataset.action || "";
+        const dateKey = actionEl.dataset.date || "";
+        const field = actionEl.dataset.field || "";
+        if(action === "toggle-details"){
+          if(!dateKey) return;
+          if(historyOpenDays.has(dateKey)){
+            historyOpenDays.delete(dateKey);
+          }else{
+            historyOpenDays.add(dateKey);
+          }
+          markViewDirty("history");
+          queueRender("main");
+          return;
+        }
+        if(action === "open-day"){
+          if(!dateKey) return;
+          setCurrentDate(new Date(dateKey + "T12:00:00"));
+          setActiveTab("today");
+          markViewDirty("today");
+          queueRender("main");
+          return;
+        }
+        if(action === "copy-prev"){
+          if(blockIfSafeMode()) return;
+          if(!dateKey || typeof actions.copyYesterday !== "function") return;
+          if(typeof actions.canCopyYesterday === "function" && !actions.canCopyYesterday(dateKey)){
+            showUndoToast("No previous day to copy");
+            return;
+          }
+          captureUndo("Copied previous day", () => actions.copyYesterday(dateKey));
+          markViewDirty("history");
+          markViewDirty("today");
+          queueRender("main");
+          return;
+        }
+        if(action === "edit-seg"){
+          if(blockIfSafeMode()) return;
+          const segId = actionEl.dataset.seg || "";
+          if(!dateKey || !segId) return;
+          setCurrentDate(new Date(dateKey + "T12:00:00"));
+          openSegment(dateKey, segId);
+          return;
+        }
+        if(action === "toggle-bool"){
+          if(blockIfSafeMode()) return;
+          if(!dateKey || !field) return;
+          captureUndo("Day toggle", () => actions.toggleBoolField(dateKey, field));
+          markViewDirty("history");
+          markViewDirty("today");
+          queueRender("main");
+          return;
+        }
+        if(action === "set-tri"){
+          if(blockIfSafeMode()) return;
+          if(!dateKey || !field) return;
+          const value = actionEl.dataset.value || "auto";
+          captureUndo("Day flag", () => actions.setDayField(dateKey, field, value));
+          markViewDirty("history");
+          markViewDirty("today");
+          queueRender("main");
+          return;
+        }
+        if(action === "set-signal"){
+          if(blockIfSafeMode()) return;
+          if(!dateKey || !field) return;
+          const value = actionEl.dataset.value || "";
+          captureUndo("Signal updated", () => actions.setDayField(dateKey, field, value));
+          markViewDirty("history");
+          markViewDirty("today");
+          queueRender("main");
+        }
+      });
+      els.historyList.addEventListener("input", (e) => {
+        const target = e.target;
+        if(!(target instanceof HTMLTextAreaElement)) return;
+        if(target.dataset.action !== "set-notes") return;
+        const dateKey = target.dataset.date || "";
+        if(!dateKey) return;
+        if(blockIfSafeMode()) return;
+        if(historyNotesTimers.has(dateKey)){
+          clearTimeout(historyNotesTimers.get(dateKey));
+        }
+        const timer = setTimeout(() => {
+          historyNotesTimers.delete(dateKey);
+          captureUndo("Notes updated", () => actions.setDayField(dateKey, "notes", target.value || ""));
+          markViewDirty("history");
+          markViewDirty("today");
+          queueRender("main");
+        }, 320);
+        historyNotesTimers.set(dateKey, timer);
+      });
+      els.historyList.addEventListener("change", (e) => {
+        const target = e.target;
+        if(!(target instanceof HTMLTextAreaElement)) return;
+        if(target.dataset.action !== "set-notes") return;
+        const dateKey = target.dataset.date || "";
+        if(!dateKey) return;
+        if(historyNotesTimers.has(dateKey)){
+          clearTimeout(historyNotesTimers.get(dateKey));
+          historyNotesTimers.delete(dateKey);
+        }
+        const value = target.value || "";
+        if(blockIfSafeMode()) return;
+        captureUndo("Notes updated", () => actions.setDayField(dateKey, "notes", value));
+        markViewDirty("history");
+        markViewDirty("today");
+        queueRender("main");
       });
     }
 
@@ -1483,6 +1620,11 @@ export function createLegacyUI(ctx){
         if(typeof actions.exportCsv === "function"){
           actions.exportCsv();
         }
+      });
+    }
+    if(els.safeModeExport){
+      els.safeModeExport.addEventListener("click", () => {
+        actions.exportState("plain");
       });
     }
     if(els.importMode){
@@ -1741,6 +1883,8 @@ export function createLegacyUI(ctx){
       const nudgesEnabled = !!els.todayNudgeToggle?.checked;
       const syncEncryption = els.syncE2eeToggle?.value === "e2ee" ? "e2ee" : "none";
       const existingSync = getState().settings?.sync || {};
+      const syncMode = els.syncMode?.value || existingSync.mode || "hosted";
+      const syncEndpoint = (els.syncEndpoint?.value || "").trim();
 
       if(nextAppLock && !hasPasscode){
         const ok = await ensureAppLockPasscode();
@@ -1785,6 +1929,8 @@ export function createLegacyUI(ctx){
         supplementsMode: els.setSupplementsMode?.value || "none",
         sync: {
           ...existingSync,
+          mode: syncMode,
+          endpoint: syncEndpoint,
           encryption: syncEncryption
         },
         privacy: {
@@ -1897,6 +2043,7 @@ export function createLegacyUI(ctx){
       markViewDirty,
       queueRender,
       yyyyMmDd,
+      logPerf,
       setSegNotesTimer: (fn, delay) => {
         clearTimeout(segNotesTimer);
         segNotesTimer = setTimeout(fn, delay);

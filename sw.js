@@ -1,6 +1,6 @@
 /* App-shell cache with explicit versioning */
 const CACHE_PREFIX = "shredmaxx-app-shell";
-const CACHE_VERSION = "v4-0.14";
+const CACHE_VERSION = "v4-0.22";
 const CACHE_NAME = `${CACHE_PREFIX}-${CACHE_VERSION}`;
 const RUNTIME_CACHE = "shredmaxx-runtime-v1";
 
@@ -29,6 +29,8 @@ const ASSETS = [
   "./ui/components/roster_list.js",
   "./ui/components/snapshot_list.js",
   "./ui/components/audit_log.js",
+  "./ui/components/diagnostics.js",
+  "./ui/components/sync_status.js",
   "./ui/components/scales.js",
   "./ui/components/rituals.js",
   "./ui/components/supplements.js",

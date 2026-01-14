@@ -1,6 +1,7 @@
 // @ts-check
 
 import { effectiveSegmentFlags, normalizeTri } from "../../domain/heuristics.js";
+import { computeRecents } from "../../domain/recents.js";
 
 export function createSegmentEditor({
   els,
@@ -109,16 +110,26 @@ export function createSegmentEditor({
     els.searchFats.value = rosterSearch.fats || "";
     els.searchMicros.value = rosterSearch.micros || "";
 
-    renderChipSet(els.chipsProteins, state.rosters.proteins, seg.proteins, rosterSearch.proteins, escapeHtml);
-    renderChipSet(els.chipsCarbs, state.rosters.carbs, seg.carbs, rosterSearch.carbs, escapeHtml);
-    renderChipSet(els.chipsFats, state.rosters.fats, seg.fats, rosterSearch.fats, escapeHtml);
-    renderChipSet(els.chipsMicros, state.rosters.micros, seg.micros, rosterSearch.micros, escapeHtml);
+    const recents = {
+      proteins: computeRecents(state.logs, "proteins", { limit: 8 }),
+      carbs: computeRecents(state.logs, "carbs", { limit: 8 }),
+      fats: computeRecents(state.logs, "fats", { limit: 8 }),
+      micros: computeRecents(state.logs, "micros", { limit: 8 })
+    };
+
+    renderChipSet(els.chipsProteins, state.rosters.proteins, seg.proteins, rosterSearch.proteins, escapeHtml, { sectioned: true, recents: recents.proteins });
+    renderChipSet(els.chipsCarbs, state.rosters.carbs, seg.carbs, rosterSearch.carbs, escapeHtml, { sectioned: true, recents: recents.carbs });
+    renderChipSet(els.chipsFats, state.rosters.fats, seg.fats, rosterSearch.fats, escapeHtml, { sectioned: true, recents: recents.fats });
+    renderChipSet(els.chipsMicros, state.rosters.micros, seg.micros, rosterSearch.micros, escapeHtml, { sectioned: true, recents: recents.micros });
 
     updateSheetHints(dateKey, segId);
     updateSegmentProgress(dateKey, segId);
 
     els.sheet.classList.remove("hidden");
     els.sheet.setAttribute("aria-hidden", "false");
+    if(els.closeSheet){
+      requestAnimationFrame(() => els.closeSheet.focus());
+    }
   }
 
   function closeSegment(){

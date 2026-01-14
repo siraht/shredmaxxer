@@ -135,10 +135,11 @@
             </div>
 
             <div class="time-row">
-              <div class="time-block">
-                <span class="time-label">CURRENT_TIME</span>
-                <span class="time-value" id="currentTime">--:--</span>
-              </div>
+            <div class="time-block">
+              <span class="time-label">CURRENT_TIME</span>
+              <span class="time-value" id="currentTime">--:--</span>
+              <span class="time-zone" id="currentTz">—</span>
+            </div>
               <div class="time-controls">
                 <button class="icon-btn" id="prevDay" type="button" aria-label="Previous day">‹</button>
                 <input class="date" id="datePicker" type="date" />
@@ -253,6 +254,20 @@
           </header>
 
           <main class="archive-body">
+            <div class="archive-filters">
+              <div class="field">
+                <label class="field-label" for="historySearch">Search</label>
+                <input class="field-input" id="historySearch" type="search" placeholder="Search roster items, tags, or flags" />
+                <div class="field-help">Matches item names, aliases, or tags (ex: seed_oil).</div>
+              </div>
+              <div class="segmented small" id="historyFilters" aria-label="History filters">
+                <button class="seg-btn" type="button" data-filter="collision">Collision</button>
+                <button class="seg-btn" type="button" data-filter="seedOil">Seed oil</button>
+                <button class="seg-btn" type="button" data-filter="highFat">High-fat</button>
+                <button class="seg-btn" type="button" data-filter="notes">Has notes</button>
+              </div>
+            </div>
+
             <div class="archive-list" id="historyList"></div>
 
             <details class="archive-panel">
@@ -279,6 +294,13 @@
             <details class="archive-panel">
               <summary>Diagnostics</summary>
               <div class="panel-body">
+                <div class="safe-mode-banner hidden" id="safeModeBanner" role="status" aria-live="polite">
+                  <div>
+                    <div class="safe-mode-title">Safe Mode active</div>
+                    <div class="safe-mode-sub">Editing is disabled. Export a recovery payload or restore a snapshot.</div>
+                  </div>
+                  <button class="btn ghost" id="safeModeExport" type="button">Export recovery</button>
+                </div>
                 <div class="diagnostics-grid">
                   <div class="diagnostic-row">
                     <span class="diagnostic-label">Storage mode:</span>
@@ -287,6 +309,22 @@
                   <div class="diagnostic-row">
                     <span class="diagnostic-label">Persistent storage:</span>
                     <span class="diagnostic-value" id="diagPersistStatus">—</span>
+                  </div>
+                  <div class="diagnostic-row">
+                    <span class="diagnostic-label">Sync status:</span>
+                    <span class="diagnostic-value" id="diagSyncStatus">—</span>
+                  </div>
+                  <div class="diagnostic-row">
+                    <span class="diagnostic-label">Outbox depth:</span>
+                    <span class="diagnostic-value" id="diagOutboxDepth">—</span>
+                  </div>
+                  <div class="diagnostic-row">
+                    <span class="diagnostic-label">Conflict count:</span>
+                    <span class="diagnostic-value" id="diagConflictCount">—</span>
+                  </div>
+                  <div class="diagnostic-row">
+                    <span class="diagnostic-label">Last sync error:</span>
+                    <span class="diagnostic-value tiny" id="diagLastError">—</span>
                   </div>
                   <div class="diagnostic-row">
                     <span class="diagnostic-label">Safe mode:</span>
@@ -322,6 +360,11 @@
                 </div>
                 <div class="snapshot-list" id="snapshotList"></div>
 
+                <label class="check mt">
+                  <input type="checkbox" id="perfLogToggle" />
+                  Perf logging (audit log)
+                </label>
+
                 <div class="section-title mt">Audit log</div>
                 <div class="row gap">
                   <select class="field-input" id="auditFilter">
@@ -348,6 +391,11 @@
             <div class="metrics-title">
               <div class="metrics-heading">INTEL</div>
               <div class="metrics-sub" id="reviewRange">—</div>
+              <div class="metrics-week-nav">
+                <button class="btn ghost tinybtn" id="reviewPrevWeek" type="button">Prev week</button>
+                <button class="btn ghost tinybtn" id="reviewTodayWeek" type="button">This week</button>
+                <button class="btn ghost tinybtn" id="reviewNextWeek" type="button">Next week</button>
+              </div>
               <div class="metrics-dots" aria-hidden="true">
                 <span></span><span></span><span></span>
               </div>
@@ -502,6 +550,7 @@
         <div class="panel">
           <div class="section-title">Sync</div>
           <div class="tiny muted">Hosted sync keeps your devices aligned. Local cache stays instant.</div>
+          <div class="tiny muted" id="syncStatusLine">Status: —</div>
 
           <div class="grid2 mt">
             <div class="field">
@@ -522,6 +571,21 @@
               </select>
               <div class="field-help">E2EE stores ciphertext only; passphrase never saved.</div>
             </div>
+
+            <div class="field">
+              <label class="field-label" for="syncMode">Sync mode</label>
+              <select class="field-input" id="syncMode">
+                <option value="hosted">Hosted (default)</option>
+                <option value="off">Paused (local only)</option>
+              </select>
+              <div class="field-help">Pause disables background sync without deleting data.</div>
+            </div>
+
+            <div class="field">
+              <label class="field-label" for="syncEndpoint">Endpoint override</label>
+              <input class="field-input" id="syncEndpoint" type="text" placeholder="/api/sync/v1" />
+              <div class="field-help">Optional; leave blank for the default endpoint.</div>
+            </div>
           </div>
 
           <div class="row gap mt">
@@ -533,6 +597,7 @@
         <div class="panel">
           <div class="section-title">Rosters</div>
           <div class="tiny muted">Edit your default options. You can also add items inside a segment.</div>
+          <div class="tiny muted">Tag hints: carb:starch, carb:fruit, carb:sugar, fat:dense, fat:seed_oil, fat:unknown.</div>
 
           <div class="roster-block">
             <div class="roster-head">

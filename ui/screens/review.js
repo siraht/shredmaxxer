@@ -7,10 +7,12 @@ import { computeReviewCorrelations } from "../../domain/correlations.js";
 import { dateToKey } from "../../domain/time.js";
 import { isWeekIndexFresh } from "../../domain/indexes.js";
 
-export function renderReviewScreen({ els, state, anchorDate, escapeHtml, onMatrixSelect }){
+export function renderReviewScreen({ els, state, anchorDate, escapeHtml, onMatrixSelect, onPerf }){
   if(!els.coverageMatrix){
     return { insights: [] };
   }
+  const perf = typeof onPerf === "function" ? onPerf : null;
+  const now = (typeof performance !== "undefined" && performance.now) ? () => performance.now() : () => 0;
 
   const rawWeekStart = state.settings.weekStart;
   const parsedWeekStart = Number.isFinite(rawWeekStart) ? rawWeekStart : Number.parseInt(rawWeekStart, 10);
@@ -19,6 +21,7 @@ export function renderReviewScreen({ els, state, anchorDate, escapeHtml, onMatri
     : 0;
   const anchor = anchorDate || new Date();
   let summary = null;
+  const tSummary = perf ? now() : 0;
   const weekKey = dateToKey(getWeekStartDate(anchor, weekStart));
   const cachedWeek = state.weekIndex?.[weekKey];
   if(cachedWeek && cachedWeek.indexVersion === 1 && isWeekIndexFresh(cachedWeek, state.logs)){
@@ -43,6 +46,9 @@ export function renderReviewScreen({ els, state, anchorDate, escapeHtml, onMatri
       weekStart,
       phase: state.settings.phase || ""
     });
+  }
+  if(perf){
+    perf("summary", now() - tSummary, { weekKey, days: summary?.dateKeys?.length || 0 });
   }
   const dateKeys = summary.dateKeys || [];
   const matrix = summary.matrix || [];
@@ -74,6 +80,7 @@ export function renderReviewScreen({ els, state, anchorDate, escapeHtml, onMatri
   }
 
   if(els.reviewCorrelations){
+    const tCorr = perf ? now() : 0;
     const correlations = Array.isArray(summary.correlations) ? summary.correlations : [];
     const fmtAvg = (value) => (value == null ? "—" : value.toFixed(2));
     const rows = correlations.map((entry) => {
@@ -86,10 +93,14 @@ export function renderReviewScreen({ els, state, anchorDate, escapeHtml, onMatri
       `;
     }).join("");
     els.reviewCorrelations.innerHTML = rows || `<div class="tiny muted">No correlations yet.</div>`;
+    if(perf){
+      perf("correlations", now() - tCorr, { count: correlations.length });
+    }
   }
 
   let insights = [];
   if(els.reviewInsights){
+    const tInsights = perf ? now() : 0;
     insights = computeInsights({ state, anchorDate: anchor, includeDay: true, includeWeek: true });
     const dayInsights = insights.filter((entry) => entry.scope === "day");
     const weekInsights = insights.filter((entry) => entry.scope === "week");
@@ -126,6 +137,9 @@ export function renderReviewScreen({ els, state, anchorDate, escapeHtml, onMatri
       blocks.push(renderGroup(`Week of ${weekInsights[0].scopeKey}`, weekInsights));
     }
     els.reviewInsights.innerHTML = blocks.join("") || `<div class="tiny muted">No insights yet.</div>`;
+    if(perf){
+      perf("insights", now() - tInsights, { count: insights.length });
+    }
   }
 
   const head = `
@@ -141,6 +155,7 @@ export function renderReviewScreen({ els, state, anchorDate, escapeHtml, onMatri
     </div>
   `;
 
+  const tMatrix = perf ? now() : 0;
   const rows = matrix.map((row) => {
     const cell = (value, col) => {
       const empty = value === 0 || value === "—";
@@ -164,6 +179,9 @@ export function renderReviewScreen({ els, state, anchorDate, escapeHtml, onMatri
   }).join("");
 
   els.coverageMatrix.innerHTML = head + rows;
+  if(perf){
+    perf("matrix", now() - tMatrix, { rows: matrix.length });
+  }
   els.coverageMatrix.querySelectorAll(".matrix-row[data-date]").forEach((row) => {
     row.addEventListener("click", (event) => {
       const key = row.dataset.date;

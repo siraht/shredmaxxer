@@ -42,6 +42,7 @@ Day controls (add to the hero/time block):
 - `prevDay`, `nextDay`: add small buttons near the time display.
 - `datePicker`: add hidden/inline input (type=date) near the time display.
 - `currentTime`: digital current time readout (HH:MM) in hero.
+- `currentTz`: timezone label (short abbreviation) beneath current time.
 - `copyYesterday`: add button near the segment deck header.
 - `phaseLabel`, `phaseSub`: add small labels near hero to show phase and subtext.
 - `toggleFocus`, `focusLabel`: add toggle affordance + label near timeline/hero.
@@ -111,13 +112,18 @@ Flags + notes:
 
 Main list:
 - `historyList`: container inside the scrollable timeline column (replace sample cards with dynamic list items).
+Filters:
+- `historySearch`: text input for filtering by roster item/tag/flag.
+- `historyFilters`: segmented filter buttons (collision/seed oil/high-fat/notes).
 
 Export/import cluster (add a utility panel in header or footer):
 - `exportBtn`, `exportAltBtn`, `exportCsvBtn`
 - `importMode` (segmented buttons), `importFile` (file input), `importApply`, `importStatus`
 
 Diagnostics + audit + snapshots:
-- `diagStorageMode`, `diagPersistStatus`, `diagSafeMode`, `diagDstClamp`, `diagSchemaVersion`, `diagAppVersion`, `diagInstallId`, `diagSnapshotCount`, `diagMissingItems`
+- `diagStorageMode`, `diagPersistStatus`, `diagSyncStatus`, `diagOutboxDepth`, `diagConflictCount`, `diagLastError`
+- `diagSafeMode`, `diagDstClamp`, `diagSchemaVersion`, `diagAppVersion`, `diagInstallId`, `diagSnapshotCount`, `diagMissingItems`
+- `perfLogToggle` (enable perf logging to audit log)
 - `auditFilter`, `auditLogList`
 - `snapshotCreate`, `snapshotList`
 
@@ -130,6 +136,7 @@ Diagnostics + audit + snapshots:
 Coverage + summary:
 - `coverageMatrix`: replace the mockup’s static grid with the rendered matrix.
 - `reviewRange`: heading sublabel (date span).
+- `reviewPrevWeek`, `reviewTodayWeek`, `reviewNextWeek`: week navigation controls.
 - `reviewSummary`: summary line under the range.
 - `reviewPhase`: phase label near summary.
 
@@ -150,8 +157,11 @@ Settings remains as its own routed section:
 - `setSunrise`, `setSunset`, `setSunMode`, `sunAutoBtn`, `sunAutoStatus`
 - `setPhase`, `setFocusMode`, `setWeekStart`, `setSupplementsMode`
 - `saveSettings`, `resetToday`
-- `syncLinkInput`, `syncLinkApply`, `syncLinkCopy`, `syncLinkStatus`, `syncNowBtn`, `syncResetSpace`, `syncE2eeToggle`
+- `syncLinkInput`, `syncLinkApply`, `syncLinkCopy`, `syncLinkStatus`, `syncStatusLine`
+- `syncMode`, `syncEndpoint`, `syncNowBtn`, `syncResetSpace`, `syncE2eeToggle`
 - `privacyAppLockToggle`, `appLockSetBtn`, `privacyBlurToggle`, `privacyRedactToggle`, `privacyEncryptedToggle`, `todayNudgeToggle`
 - `roster-proteins`, `roster-carbs`, `roster-fats`, `roster-micros`, `roster-supplements`, `roster-supplements-block`
+
+Roster items include editable fields for label, icon, aliases, and tags (via `data-field` inputs).
 
 Recommendation: keep the existing Settings layout for now but re-skin with mockup tokens once screens are wired.

@@ -23,6 +23,7 @@ export function renderRosterList(category, container, roster, escapeHtml){
   container.innerHTML = sorted.map((item) => {
     const id = item?.id || "";
     const label = item?.label || "";
+    const icon = item?.icon || "";
     const aliases = Array.isArray(item?.aliases) ? item.aliases.join(", ") : "";
     const tags = Array.isArray(item?.tags) ? item.tags.join(", ") : "";
     const pinned = item?.pinned ? "active" : "";
@@ -37,6 +38,9 @@ export function renderRosterList(category, container, roster, escapeHtml){
             <button class="btn ghost tinybtn ${archived}" type="button" data-action="archive">${item?.archived ? "Archived" : "Archive"}</button>
             <button class="btn ghost tinybtn" type="button" data-action="remove">Remove</button>
           </div>
+        </div>
+        <div class="roster-row">
+          <input class="roster-input" type="text" data-field="icon" placeholder="Icon (emoji or short label)" value="${escapeHtml(icon)}" />
         </div>
         <div class="roster-row">
           <input class="roster-input" type="text" data-field="aliases" placeholder="Aliases (comma-separated)" value="${escapeHtml(aliases)}" />
