@@ -141,6 +141,31 @@ export function computeSegmentCoverage(logs, dateKeys){
 }
 
 /**
+ * Summarize issue frequency for the week.
+ * @param {Record<string, DayLog>} logs
+ * @param {string[]} dateKeys
+ * @param {any} rosters
+ * @returns {{collisionDays:number, seedOilDays:number, highFatMealDays:number, highFatDayDays:number}}
+ */
+export function computeIssueFrequency(logs, dateKeys, rosters){
+  const list = Array.isArray(dateKeys) ? dateKeys : [];
+  let collisionDays = 0;
+  let seedOilDays = 0;
+  let highFatMealDays = 0;
+  let highFatDayDays = 0;
+
+  const matrix = computeCoverageMatrix(logs || {}, rosters, list);
+  for(const row of matrix){
+    if(row.flags.collision) collisionDays += 1;
+    if(row.flags.seedOil) seedOilDays += 1;
+    if(row.flags.highFat) highFatMealDays += 1;
+    if(logs?.[row.dateKey]?.highFatDay) highFatDayDays += 1;
+  }
+
+  return { collisionDays, seedOilDays, highFatMealDays, highFatDayDays };
+}
+
+/**
  * Provide a phase-aware guidance label (display only).
  * @param {""|"strict"|"maintenance"|"advanced"} phase
  */
@@ -169,6 +194,7 @@ export function computeWeeklySummary(params){
   const ftnSummary = summarizeFtnModes(params.logs || {}, dateKeys);
   const coverage = computeSegmentCoverage(params.logs || {}, dateKeys);
   const matrix = computeCoverageMatrix(params.logs || {}, params.rosters, dateKeys);
+  const issueFrequency = computeIssueFrequency(params.logs || {}, dateKeys, params.rosters);
   const phaseLabel = getPhaseTargetLabel(params.phase || "");
   return {
     dateKeys,
@@ -176,6 +202,7 @@ export function computeWeeklySummary(params){
     ftnSummary,
     coverage,
     matrix,
+    issueFrequency,
     phaseLabel
   };
 }
