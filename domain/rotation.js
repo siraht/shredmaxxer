@@ -31,7 +31,7 @@ export function computeLastUsed(logs, dateKeys){
     out[cat] = new Map();
   }
   const keys = Array.isArray(dateKeys) && dateKeys.length
-    ? [...dateKeys]
+    ? [...dateKeys].sort().reverse()
     : Object.keys(logs || {}).sort().reverse();
 
   for(const dateKey of keys){
