@@ -37,6 +37,32 @@ function compareRecords(a, b){
   return compareByRevAndTime(aRev, aTs, bRev, bTs);
 }
 
+function segmentHasContent(seg, segId){
+  if(!seg) return false;
+  const hasItems = (seg.proteins?.length || 0)
+    || (seg.carbs?.length || 0)
+    || (seg.fats?.length || 0)
+    || (seg.micros?.length || 0);
+  const collision = (seg.collision === "" || seg.collision == null) ? "auto" : seg.collision;
+  const highFatMeal = (seg.highFatMeal === "" || seg.highFatMeal == null) ? "auto" : seg.highFatMeal;
+  const hasFlags = collision !== "auto"
+    || highFatMeal !== "auto"
+    || seg.seedOil
+    || seg.notes;
+  const hasFtn = segId === "ftn" && seg.ftnMode;
+  return !!(hasItems || hasFlags || hasFtn);
+}
+
+function syncSegmentStatus(seg, segId){
+  if(!seg) return;
+  if(segmentHasContent(seg, segId)){
+    seg.status = "logged";
+    return;
+  }
+  if(seg.status === "none") return;
+  seg.status = "unlogged";
+}
+
 /**
  * @param {any} segA
  * @param {any} segB
@@ -110,6 +136,7 @@ export function mergeDay(dayA, dayB, options = {}){
       loser?.segments?.[id],
       options
     );
+    syncSegmentStatus(merged.segments[id], id);
   }
 
   return merged;

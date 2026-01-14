@@ -6,6 +6,17 @@ import { searchRosterItems } from "../domain/search.js";
 import { computeRotationPicks } from "../domain/rotation.js";
 import { computeInsights } from "../domain/insights.js";
 import { computeWeeklySummary } from "../domain/weekly.js";
+import {
+  countIssues,
+  dayHasDailyContent,
+  formatLatLon,
+  formatSnapshotTime,
+  mergeDayDiversity,
+  parseCommaList,
+  parseCopySegments,
+  segCounts,
+  segmentHasContent
+} from "./legacy_helpers.js";
 
 export function createLegacyUI(ctx){
   const { els, helpers, actions, defaults } = ctx;
@@ -203,33 +214,6 @@ export function createLegacyUI(ctx){
 
   function formatRange(aMin, bMin){
     return `${minutesToTime(aMin)}–${minutesToTime(bMin)}`;
-  }
-
-  function segCounts(seg){
-    return {
-      P: seg.proteins.length,
-      C: seg.carbs.length,
-      F: seg.fats.length,
-      M: seg.micros.length
-    };
-  }
-
-  function segmentHasContent(seg, segId){
-    if(!seg) return false;
-    const hasItems = seg.proteins.length || seg.carbs.length || seg.fats.length || seg.micros.length;
-    const hasFlags = (seg.collision && seg.collision !== "auto") || (seg.highFatMeal && seg.highFatMeal !== "auto") || seg.seedOil || seg.notes;
-    const hasFtn = segId === "ftn" && seg.ftnMode;
-    return !!(hasItems || hasFlags || hasFtn);
-  }
-
-  function dayHasDailyContent(day){
-    if(!day) return false;
-    return !!(day.movedBeforeLunch || day.trained || day.highFatDay || day.energy || day.mood || day.cravings || day.notes);
-  }
-
-  function formatLatLon(lat, lon){
-    if(!Number.isFinite(lat) || !Number.isFinite(lon)) return "";
-    return `${lat.toFixed(4)}, ${lon.toFixed(4)}`;
   }
 
   function setSunAutoStatus(text){
@@ -559,27 +543,6 @@ export function createLegacyUI(ctx){
     if(getCurrentSegmentId() === segId && !els.sheet.classList.contains("hidden")){
       openSegment(dateKey, segId);
     }
-  }
-
-  function parseCopySegments(input){
-    const raw = String(input || "").trim().toLowerCase();
-    if(!raw) return { segments: [], includeDaily: false };
-    if(raw === "all" || raw === "day"){
-      return { segments: ["ftn", "lunch", "dinner", "late"], includeDaily: true };
-    }
-    const map = {
-      ftn: "ftn",
-      lunch: "lunch",
-      dinner: "dinner",
-      late: "late"
-    };
-    const parts = raw.split(/[, ]+/).map(p => p.trim()).filter(Boolean);
-    const segments = [];
-    for(const part of parts){
-      const id = map[part];
-      if(id && !segments.includes(id)) segments.push(id);
-    }
-    return { segments, includeDaily: false };
   }
 
   function copyYesterdayIntoToday(){
@@ -1213,41 +1176,6 @@ export function createLegacyUI(ctx){
     if(els.todayNudgeReason) els.todayNudgeReason.textContent = pick.reason ? `Reason: ${pick.reason}` : "";
   }
 
-  function mergeDayDiversity(day){
-    const out = { proteins: 0, carbs: 0, fats: 0, micros: 0 };
-    const sets = { proteins: new Set(), carbs: new Set(), fats: new Set(), micros: new Set() };
-    for(const seg of Object.values(day.segments || {})){
-      for(const k of ["proteins", "carbs", "fats", "micros"]){
-        (seg[k] || []).forEach(x => sets[k].add(x));
-      }
-    }
-    out.proteins = sets.proteins.size;
-    out.carbs = sets.carbs.size;
-    out.fats = sets.fats.size;
-    out.micros = sets.micros.size;
-    return out;
-  }
-
-  function countIssues(day){
-    const state = getState();
-    let collision = false;
-    let seedOil = false;
-    let highFat = false;
-    for(const seg of Object.values(day.segments || {})){
-      const effective = effectiveSegmentFlags(seg, state.rosters);
-      if(effective.collision.value) collision = true;
-      if(seg.seedOil === "yes") seedOil = true;
-      if(effective.highFatMeal.value) highFat = true;
-    }
-    return { collision, seedOil, highFat };
-  }
-
-  function formatSnapshotTime(ts){
-    const d = new Date(ts);
-    if(Number.isNaN(d.getTime())) return String(ts || "");
-    return d.toLocaleString([], { year: "numeric", month: "short", day: "2-digit", hour: "2-digit", minute: "2-digit" });
-  }
-
   function renderSnapshotList(list){
     if(!els.snapshotList) return;
     const items = Array.isArray(list) ? list : [];
@@ -1363,7 +1291,7 @@ export function createLegacyUI(ctx){
     els.historyList.innerHTML = list.map(k => {
       const d = state.logs[k];
       const all = mergeDayDiversity(d);
-      const issues = countIssues(d);
+      const issues = countIssues(d, state.rosters);
       return `
         <div class="day-item" data-date="${k}">
           <div class="left">
@@ -1689,13 +1617,6 @@ export function createLegacyUI(ctx){
         </div>
       `;
     }).join("");
-  }
-
-  function parseCommaList(value){
-    return String(value || "")
-      .split(",")
-      .map((part) => part.trim())
-      .filter(Boolean);
   }
 
   function wireRosterContainer(category, container){
@@ -2254,6 +2175,9 @@ export function createLegacyUI(ctx){
     wireRosterContainer("carbs", els.rosterCarbs);
     wireRosterContainer("fats", els.rosterFats);
     wireRosterContainer("micros", els.rosterMicros);
+    if(els.rosterSupplements){
+      wireRosterContainer("supplements", els.rosterSupplements);
+    }
 
     // sheet close
     els.sheetBackdrop.addEventListener("click", closeSegment);

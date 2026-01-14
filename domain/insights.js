@@ -165,6 +165,12 @@ function segmentHasAnyItems(segment){
   return ["proteins", "carbs", "fats", "micros"].some((k) => (segment?.[k]?.length || 0) > 0);
 }
 
+function dayHasAnyItems(day){
+  if(!day || typeof day !== "object") return false;
+  const segments = day?.segments || {};
+  return Object.values(segments).some((seg) => segmentHasAnyItems(seg));
+}
+
 /**
  * Compute insights for a single day.
  * @param {{
@@ -251,7 +257,8 @@ export function computeDayInsights(params){
   for(const segId of segIds){
     const seg = day?.segments?.[segId];
     if(!seg) continue;
-    const seedOilTagged = hasTag(seg?.fats, "fat:seed_oil", tagIndex);
+    const seedOilTagged = hasTag(seg?.fats, "fat:seed_oil", tagIndex)
+      || hasTag(seg?.fats, "fat:unknown", tagIndex);
     if(seedOilTagged && seg?.seedOil !== "yes"){
       const items = (seg?.fats || []).map((id) => labelMap.get(id) || id).slice(0, 2);
       const label = items.length ? ` (${items.join(", ")})` : "";
@@ -262,8 +269,8 @@ export function computeDayInsights(params){
         scope: "day",
         scopeKey: dateKey,
         title: "Seed oil check",
-        message: `${prefix}Seed-oil-tagged fat selected${label}. Confirm seed-oil exposure.`,
-        reason: "fat:seed_oil tag detected without seedOil flag.",
+        message: `${prefix}Seed/unknown-oil-tagged fat selected${label}. Confirm seed-oil exposure.`,
+        reason: "fat:seed_oil or fat:unknown tag detected without seedOil flag.",
         tone: "info"
       });
       break;
@@ -309,7 +316,9 @@ export function computeWeekInsights(params){
   for(const key of dateKeys){
     const day = logs?.[key];
     if(!day || typeof day !== "object") continue;
-    loggedDays += 1;
+    if(dayHasAnyItems(day)){
+      loggedDays += 1;
+    }
     const segments = day?.segments || {};
     for(const seg of Object.values(segments)){
       const micros = Array.isArray(seg?.micros) ? seg.micros : [];

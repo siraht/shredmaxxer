@@ -27,6 +27,7 @@ export function sortDateKeysDesc(logs){
  */
 export function computeRecents(logs, category, options = {}){
   const limit = Number.isFinite(options.limit) ? Math.max(0, options.limit) : 8;
+  if(limit === 0) return [];
   const segmentOrder = Array.isArray(options.segmentOrder) ? options.segmentOrder : DEFAULT_SEGMENT_ORDER;
   const seen = new Set();
   const out = [];

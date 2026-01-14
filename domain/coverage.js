@@ -25,7 +25,7 @@ export function computeDayCoverage(day, rosters){
 
   const segments = day?.segments || {};
   for(const seg of Object.values(segments)){
-    if(!seg) continue;
+    if(!seg || typeof seg !== "object") continue;
     for(const cat of CATEGORIES){
       const items = Array.isArray(seg[cat]) ? seg[cat] : [];
       items.forEach((item) => sets[cat].add(item));

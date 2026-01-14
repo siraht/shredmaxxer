@@ -11,18 +11,28 @@ import { normalizeTri } from "./domain/heuristics.js";
 import { ensureDayMeta, ensureSegmentMeta, touchDay, touchSegment } from "./domain/revisions.js";
 import { activeDayKey, addDaysLocal, dateToKey, computeSunTimes } from "./domain/time.js";
 import { createInsightsState, mergeInsightsState, dismissInsight } from "./domain/insights.js";
-import { mergeDay, mergeRosters } from "./storage/merge.js";
+import { mergeRosters } from "./storage/merge.js";
 import { savePreImportSnapshot, saveSnapshotWithRetention } from "./storage/snapshots.js";
 import { createDefaultRosters, findDefaultRosterTemplate } from "./domain/roster_defaults.js";
 import { createRosterItem, findRosterItemByLabel, normalizeLabel } from "./domain/roster.js";
 import { setRosterLabel, setRosterAliases, setRosterTags, toggleRosterPinned, toggleRosterArchived } from "./domain/roster_edit.js";
 import { migrateV3ToV4 } from "./storage/migrate.js";
 import { APP_VERSION, buildMeta } from "./storage/meta.js";
-import { validateImportPayload as validateV4Import } from "./storage/validate.js";
 import { serializeExport } from "./storage/export.js";
 import { buildCsvExport } from "./storage/csv_export.js";
 import { encryptExport, decryptExport } from "./storage/encrypted_export.js";
 import { storageAdapter } from "./storage/adapter.js";
+import { clearSegmentContents, createDefaultDay, mergeSettings, segmentHasContent, syncSegmentStatus } from "./app/helpers.js";
+import {
+  applySegmentStatus,
+  copyDaySegmentsFromSource,
+  copySegmentFromSource,
+  scrubRosterItemFromDay,
+  setSupplementsNotesInDay,
+  toggleSegmentItemInSegment,
+  toggleSupplementItemInDay
+} from "./app/action_logic.js";
+import { mergeLogs, validateImportPayload } from "./app/import_logic.js";
 
 const STORAGE_KEY = "shredmaxx_tracker_v4";
 const LEGACY_KEY_V3 = "shredmaxx_tracker_v3";
@@ -124,17 +134,6 @@ function deepClone(x){
     : JSON.parse(JSON.stringify(x));
 }
 
-function mergeSettings(base, next){
-  const merged = { ...(base || {}), ...(next || {}) };
-  if(base?.privacy || next?.privacy){
-    merged.privacy = { ...(base?.privacy || {}), ...(next?.privacy || {}) };
-  }
-  if(merged.privacy && Object.prototype.hasOwnProperty.call(merged.privacy, "appLockHash")){
-    delete merged.privacy.appLockHash;
-  }
-  return merged;
-}
-
 function yyyyMmDd(d){
   return dateToKey(d);
 }
@@ -163,6 +162,24 @@ function fmtTime(hhmm){
   return hhmm || "—";
 }
 
+function safeLocalStorageSet(key, value){
+  try{
+    if(typeof localStorage === "undefined") return;
+    localStorage.setItem(key, value);
+  }catch(e){
+    // ignore localStorage failures (blocked/quota/etc.)
+  }
+}
+
+function safeLocalStorageGet(key){
+  try{
+    if(typeof localStorage === "undefined") return null;
+    return localStorage.getItem(key);
+  }catch(e){
+    return null;
+  }
+}
+
 function escapeHtml(str){
   return String(str)
     .replaceAll("&", "&amp;")
@@ -175,28 +192,6 @@ function escapeHtml(str){
 function nowMinutes(){
   const d = new Date();
   return d.getHours() * 60 + d.getMinutes();
-}
-
-function createDefaultDay(){
-  return {
-    segments: {
-      ftn: { status: "unlogged", ftnMode: "", proteins: [], carbs: [], fats: [], micros: [], collision: "auto", highFatMeal: "auto", seedOil: "", notes: "", tsFirst: "", tsLast: "", rev: 0 },
-      lunch: { status: "unlogged", proteins: [], carbs: [], fats: [], micros: [], collision: "auto", highFatMeal: "auto", seedOil: "", notes: "", tsFirst: "", tsLast: "", rev: 0 },
-      dinner: { status: "unlogged", proteins: [], carbs: [], fats: [], micros: [], collision: "auto", highFatMeal: "auto", seedOil: "", notes: "", tsFirst: "", tsLast: "", rev: 0 },
-      late: { status: "unlogged", proteins: [], carbs: [], fats: [], micros: [], collision: "auto", highFatMeal: "auto", seedOil: "", notes: "", tsFirst: "", tsLast: "", rev: 0 }
-    },
-    supplements: { mode: "none", items: [], notes: "", tsLast: "" },
-    movedBeforeLunch: false,
-    trained: false,
-    highFatDay: false,
-    energy: "",
-    mood: "",
-    cravings: "",
-    notes: "",
-    tsCreated: "",
-    tsLast: "",
-    rev: 0
-  };
 }
 
 function createDefaultState(){
@@ -274,7 +269,7 @@ async function loadState(){
   // Try v4 storage adapter first (IndexedDB or localStorage fallback)
   try {
     const v4State = await storageAdapter.loadState();
-    if(v4State && v4State.version === 4) {
+    if(v4State && (v4State.version === 4 || v4State.meta?.version === 4)) {
       return hydrateState(v4State);
     }
   } catch(e) {
@@ -283,7 +278,7 @@ async function loadState(){
 
   // Fallback: check legacy localStorage keys for migration
   // Prefer v4 key in localStorage
-  const raw = localStorage.getItem(STORAGE_KEY);
+  const raw = safeLocalStorageGet(STORAGE_KEY);
   if(raw){
     try{
       const obj = JSON.parse(raw);
@@ -302,7 +297,7 @@ async function loadState(){
   }
 
   // Fallback: migrate from v3 key
-  const legacyRaw = localStorage.getItem(LEGACY_KEY_V3);
+  const legacyRaw = safeLocalStorageGet(LEGACY_KEY_V3);
   if(legacyRaw){
     try{
       const legacy = JSON.parse(legacyRaw);
@@ -321,7 +316,7 @@ async function loadState(){
   }
 
   // Fallback: migrate from v1 key
-  const legacyV1Raw = localStorage.getItem(LEGACY_KEY_V1);
+  const legacyV1Raw = safeLocalStorageGet(LEGACY_KEY_V1);
   if(legacyV1Raw){
     try{
       const legacy = JSON.parse(legacyV1Raw);
@@ -341,7 +336,7 @@ function hydrateState(obj){
   if(obj.settings) s.settings = mergeSettings(s.settings, obj.settings);
   if(obj.insights) s.insights = mergeInsightsState(s.insights, obj.insights);
   if(obj.rosters){
-    for(const k of ["proteins", "carbs", "fats", "micros"]){
+    for(const k of ["proteins", "carbs", "fats", "micros", "supplements"]){
       if(Array.isArray(obj.rosters[k])) s.rosters[k] = obj.rosters[k];
     }
   }
@@ -374,7 +369,7 @@ async function persistDay(dateKey, dayLog) {
   } catch(e) {
     console.error("Failed to persist day:", e);
     // Fallback to localStorage for safety
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    safeLocalStorageSet(STORAGE_KEY, JSON.stringify(state));
   }
 }
 
@@ -383,7 +378,7 @@ async function persistRosters() {
     await storageAdapter.saveRosters(state.rosters);
   } catch(e) {
     console.error("Failed to persist rosters:", e);
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    safeLocalStorageSet(STORAGE_KEY, JSON.stringify(state));
   }
 }
 
@@ -392,7 +387,7 @@ async function persistSettings() {
     await storageAdapter.saveSettings(state.settings);
   } catch(e) {
     console.error("Failed to persist settings:", e);
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    safeLocalStorageSet(STORAGE_KEY, JSON.stringify(state));
   }
 }
 
@@ -401,11 +396,11 @@ async function persistInsights() {
     if(storageAdapter.saveInsights){
       await storageAdapter.saveInsights(state.insights);
     }else{
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+      safeLocalStorageSet(STORAGE_KEY, JSON.stringify(state));
     }
   } catch(e) {
     console.error("Failed to persist insights:", e);
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    safeLocalStorageSet(STORAGE_KEY, JSON.stringify(state));
   }
 }
 
@@ -422,7 +417,7 @@ async function persistAll() {
     }
   } catch(e) {
     console.error("Failed to persist all state:", e);
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    safeLocalStorageSet(STORAGE_KEY, JSON.stringify(state));
   }
 }
 
@@ -554,75 +549,22 @@ function copyYesterday(dateKey){
   if(!source || !dayHasSegmentData(source)) return false;
 
   const day = getDay(dateKey);
-  const base = createDefaultDay();
-  const sourceSegments = source.segments || {};
   const nowIso = new Date().toISOString();
-
-  for(const segId of Object.keys(base.segments)){
-    const template = base.segments[segId];
-    const incoming = sourceSegments[segId] || {};
-    const next = { ...template, ...deepClone(incoming) };
-    if(segId !== "ftn") delete next.ftnMode;
-    next.tsFirst = "";
-    next.tsLast = "";
-    next.rev = 0;
-    syncSegmentStatus(next, segId);
-    touchSegment(next, nowIso);
-    day.segments[segId] = next;
-  }
-
+  copyDaySegmentsFromSource(day, source, nowIso);
   touchDay(day, nowIso);
   setDay(dateKey, day);
   return true;
 }
 
-function segmentHasContent(seg, segId){
-  if(!seg) return false;
-  const hasItems = seg.proteins.length || seg.carbs.length || seg.fats.length || seg.micros.length;
-  const hasFlags = seg.collision !== "auto" || seg.highFatMeal !== "auto" || seg.seedOil || seg.notes;
-  const hasFtn = segId === "ftn" && seg.ftnMode;
-  return !!(hasItems || hasFlags || hasFtn);
-}
-
-function clearSegmentContents(seg, segId){
-  seg.proteins = [];
-  seg.carbs = [];
-  seg.fats = [];
-  seg.micros = [];
-  seg.collision = "auto";
-  seg.highFatMeal = "auto";
-  seg.seedOil = "";
-  seg.notes = "";
-  if(segId === "ftn") seg.ftnMode = "";
-}
-
-function syncSegmentStatus(seg, segId){
-  const hasContent = segmentHasContent(seg, segId);
-  if(hasContent){
-    seg.status = "logged";
-    return;
-  }
-  if(seg.status !== "none"){
-    seg.status = "unlogged";
-  }
-}
+// mergeSettings/createDefaultDay/segment helpers live in app/helpers.js
 
 function toggleSegmentItem(dateKey, segId, category, itemId){
   const day = getDay(dateKey);
   const seg = day.segments[segId];
   if(!seg) return;
-
-  const arr = seg[category];
-  const idx = arr.indexOf(itemId);
-  if(idx >= 0) arr.splice(idx, 1);
-  else arr.push(itemId);
-
-  syncSegmentStatus(seg, segId);
-
   const nowIso = new Date().toISOString();
-  touchSegment(seg, nowIso);
+  toggleSegmentItemInSegment(seg, segId, category, itemId, nowIso);
   touchDay(day, nowIso);
-
   setDay(dateKey, day);
 }
 
@@ -630,19 +572,8 @@ function setSegmentStatus(dateKey, segId, status){
   const day = getDay(dateKey);
   const seg = day.segments[segId];
   if(!seg) return;
-  if(status !== "unlogged" && status !== "none" && status !== "logged") return;
-  if(seg.status === status) return;
-
-  if(status === "none" || status === "unlogged"){
-    clearSegmentContents(seg, segId);
-    seg.status = status;
-  }else{
-    seg.status = "logged";
-    syncSegmentStatus(seg, segId);
-  }
-
   const nowIso = new Date().toISOString();
-  touchSegment(seg, nowIso);
+  if(!applySegmentStatus(seg, segId, status, nowIso)) return;
   touchDay(day, nowIso);
   setDay(dateKey, day);
 }
@@ -687,25 +618,9 @@ function copySegment(dateKey, targetSegId, sourceSeg){
   const day = getDay(dateKey);
   const target = day.segments[targetSegId];
   if(!target) return;
-
-  const clone = deepClone(sourceSeg);
-  if(targetSegId !== "ftn"){
-    delete clone.ftnMode;
-  }
-
-  const next = { ...target, ...clone };
-  if(targetSegId !== "ftn"){
-    delete next.ftnMode;
-  }
-  next.tsFirst = "";
-  next.tsLast = "";
-  next.rev = 0;
-
-  day.segments[targetSegId] = next;
-  syncSegmentStatus(next, targetSegId);
-
   const nowIso = new Date().toISOString();
-  touchSegment(next, nowIso);
+  const next = copySegmentFromSource(targetSegId, target, sourceSeg, nowIso);
+  day.segments[targetSegId] = next;
   touchDay(day, nowIso);
   setDay(dateKey, day);
 }
@@ -719,39 +634,20 @@ function setDayField(dateKey, field, value){
 }
 
 function toggleSupplementItem(dateKey, itemId){
-  if(!itemId) return;
   const day = getDay(dateKey);
   const defaultMode = state?.settings?.supplementsMode || "none";
-  const supp = day.supplements && typeof day.supplements === "object"
-    ? { ...day.supplements }
-    : { mode: defaultMode, items: [], notes: "", tsLast: "" };
-  if(!Array.isArray(supp.items)) supp.items = [];
-  const idx = supp.items.indexOf(itemId);
-  if(idx >= 0){
-    supp.items.splice(idx, 1);
-  }else{
-    supp.items.push(itemId);
-  }
-  supp.mode = supp.mode || defaultMode;
-  supp.tsLast = new Date().toISOString();
-  day.supplements = supp;
-  touchDay(day, supp.tsLast);
+  const nowIso = new Date().toISOString();
+  if(!toggleSupplementItemInDay(day, itemId, defaultMode, nowIso)) return;
+  touchDay(day, nowIso);
   setDay(dateKey, day);
 }
 
 function setSupplementsNotes(dateKey, notes){
   const day = getDay(dateKey);
   const defaultMode = state?.settings?.supplementsMode || "none";
-  const supp = day.supplements && typeof day.supplements === "object"
-    ? { ...day.supplements }
-    : { mode: defaultMode, items: [], notes: "", tsLast: "" };
-  const nextNotes = (typeof notes === "string") ? notes : String(notes || "");
-  if(supp.notes === nextNotes) return;
-  supp.mode = supp.mode || defaultMode;
-  supp.notes = nextNotes;
-  supp.tsLast = new Date().toISOString();
-  day.supplements = supp;
-  touchDay(day, supp.tsLast);
+  const nowIso = new Date().toISOString();
+  if(!setSupplementsNotesInDay(day, notes, defaultMode, nowIso)) return;
+  touchDay(day, nowIso);
   setDay(dateKey, day);
 }
 
@@ -786,16 +682,15 @@ function removeRosterItem(category, itemId){
   state.rosters[category] = roster;
 
   // scrub from logs
+  const nowIso = new Date().toISOString();
   for(const dk of Object.keys(state.logs)){
     const day = getDay(dk);
-    for(const seg of Object.values(day.segments)){
-      const arr = seg[category];
-      if(Array.isArray(arr)){
-        const j = arr.indexOf(itemId);
-        if(j >= 0) arr.splice(j, 1);
-      }
+    const dayChanged = scrubRosterItemFromDay(day, category, itemId, nowIso);
+    if(dayChanged){
+      touchDay(day, nowIso);
+      state.logs[dk] = day;
+      persistDay(dk, day).catch(e => console.error("Persist day failed:", e));
     }
-    state.logs[dk] = day;
   }
 
   persistRosters().catch(e => console.error("Persist rosters failed:", e));
@@ -943,49 +838,6 @@ function replaceState(nextState){
   if(!nextState || typeof nextState !== "object") return;
   state = deepClone(nextState);
   persistAll().catch(e => console.error("Persist state failed:", e));
-}
-
-function mergeLogs(baseLogs, incomingLogs){
-  const out = { ...(baseLogs || {}) };
-  if(!incomingLogs || typeof incomingLogs !== "object") return out;
-
-  for(const [dateKey, nextDay] of Object.entries(incomingLogs)){
-    if(out[dateKey]){
-      out[dateKey] = mergeDay(out[dateKey], nextDay);
-    }else{
-      out[dateKey] = nextDay;
-    }
-  }
-
-  return out;
-}
-
-function validateImportPayload(payload){
-  if(!payload || typeof payload !== "object"){
-    return { ok: false, error: "Import failed: payload must be an object." };
-  }
-
-  const version = payload.version;
-  if(version === 4){
-    const result = validateV4Import(payload);
-    if(!result.ok){
-      return { ok: false, error: result.errors?.[0] || "Import failed: invalid v4 payload.", version: 4 };
-    }
-    return { ok: true, legacy: false, version: 4 };
-  }
-  if(version && version !== 3){
-    return { ok: false, error: `Unsupported import version ${version}.`, version };
-  }
-
-  if(payload.logs && typeof payload.logs !== "object"){
-    return { ok: false, error: "Import failed: logs must be an object keyed by date." };
-  }
-
-  return {
-    ok: true,
-    legacy: true,
-    version: version || 3
-  };
 }
 
 async function applyImportPayload(payload, mode){

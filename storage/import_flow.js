@@ -22,10 +22,16 @@ import { createInsightsState, mergeInsightsState } from "../domain/insights.js";
  * @returns {{version:number, meta:any, settings:any, rosters:any, logs:any}}
  */
 export function sanitizeImportPayload(payload){
+  const settings = payload?.settings && typeof payload.settings === "object"
+    ? { ...payload.settings, privacy: { ...(payload.settings.privacy || {}) } }
+    : payload?.settings;
+  if(settings?.privacy && Object.prototype.hasOwnProperty.call(settings.privacy, "appLockHash")){
+    delete settings.privacy.appLockHash;
+  }
   return {
     version: payload.version,
     meta: payload.meta,
-    settings: payload.settings,
+    settings,
     rosters: payload.rosters,
     insights: payload.insights,
     logs: payload.logs
