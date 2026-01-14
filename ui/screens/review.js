@@ -178,25 +178,29 @@ export function renderReviewScreen({ els, state, anchorDate, escapeHtml, onMatri
 
   if(els.rotationPicks){
     const picks = computeRotationPicks({ rosters: state.rosters, logs: state.logs }, { limitPerCategory: 2, dateKeys });
-    const labelMap = {
-      proteins: "Proteins",
-      carbs: "Carbs",
-      fats: "Fats",
-      micros: "Accoutrements (μ)"
+    const tagMap = {
+      proteins: "[High P]",
+      carbs: "[Fuel]",
+      fats: "[Sat Fat]",
+      micros: "[Micro]"
     };
-    const rowsHtml = Object.keys(labelMap).map((cat) => {
+    const list = Object.keys(tagMap).flatMap((cat) => {
       const items = picks[cat] || [];
-      const chips = items.length
-        ? items.map((item) => `<span class="chip">${escapeHtml(item.label)}</span>`).join("")
-        : `<span class="tiny muted">No picks yet</span>`;
-      return `
-        <div class="pick-row">
-          <div class="pick-label">${labelMap[cat]}</div>
-          <div class="pick-items">${chips}</div>
+      return items.map((item) => ({ cat, item }));
+    });
+    if(!list.length){
+      els.rotationPicks.innerHTML = `<div class="tiny muted">No picks yet</div>`;
+    }else{
+      els.rotationPicks.innerHTML = list.map((entry, idx) => `
+        <div class="pick-row ${idx === 0 ? "active" : ""}" data-cat="${escapeHtml(entry.cat)}">
+          <div class="pick-chevron">›</div>
+          <div class="pick-meta">
+            <div class="pick-text">Try: <span>${escapeHtml(entry.item.label || entry.item.id || "")}</span></div>
+            <div class="pick-tag">${tagMap[entry.cat]}</div>
+          </div>
         </div>
-      `;
-    }).join("");
-    els.rotationPicks.innerHTML = rowsHtml;
+      `).join("");
+    }
   }
 
   return { insights };

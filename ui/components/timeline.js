@@ -44,6 +44,10 @@ export function renderTimeline({
     title.className = "segment-title";
     title.textContent = d.label;
 
+    const kicker = document.createElement("div");
+    kicker.className = "segment-kicker";
+    kicker.textContent = "WINDOW";
+
     const time = document.createElement("div");
     time.className = "segment-time";
     time.textContent = formatRange(d.start, d.end);
@@ -61,6 +65,7 @@ export function renderTimeline({
       <div class="bubble" data-b="M">μ<span class="count" data-c="M"></span></div>
     `;
 
+    segEl.appendChild(kicker);
     segEl.appendChild(title);
     segEl.appendChild(time);
     segEl.appendChild(flags);

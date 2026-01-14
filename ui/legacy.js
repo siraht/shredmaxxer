@@ -647,6 +647,21 @@ export function createLegacyUI(ctx){
       whichSegment,
       segmentElsRef
     });
+    renderCurrentTime(dateKey);
+  }
+
+  function renderCurrentTime(dateKey){
+    if(!els.currentTime) return;
+    if(dateKey !== getActiveDateKey()){
+      els.currentTime.textContent = "—";
+      return;
+    }
+    const now = new Date();
+    const mins = String(now.getMinutes()).padStart(2, "0");
+    const rawHours = now.getHours();
+    const period = rawHours >= 12 ? "PM" : "AM";
+    const hours = rawHours % 12 || 12;
+    els.currentTime.innerHTML = `${hours}:${mins} <span class="time-period">${period}</span>`;
   }
 
   function renderNowMarker(dateKey){
@@ -1356,6 +1371,21 @@ export function createLegacyUI(ctx){
     });
     if(els.copyYesterday){
       els.copyYesterday.addEventListener("click", copyYesterdayIntoToday);
+    }
+    if(els.fabEdit){
+      els.fabEdit.addEventListener("click", () => {
+        if(blockIfSafeMode()) return;
+        const dateKey = yyyyMmDd(getCurrentDate());
+        const defs = getSegmentDefs(getState().settings);
+        if(!defs.length) return;
+        let segId = defs[0].id;
+        if(dateKey === getActiveDateKey()){
+          const now = nowMinutes();
+          const nowLifted = liftMinuteToTimeline(now, defs[0].start);
+          segId = whichSegment(nowLifted, defs);
+        }
+        openSegment(dateKey, segId);
+      });
     }
     if(els.todayNudgeDismiss){
       els.todayNudgeDismiss.addEventListener("click", () => {

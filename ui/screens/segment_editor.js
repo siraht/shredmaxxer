@@ -47,11 +47,28 @@ export function createSegmentEditor({
     }
   }
 
+  function updateSegmentProgress(dateKey, segId){
+    if(!els.sheetProgress) return;
+    const day = getDay(dateKey);
+    const seg = day.segments[segId];
+    if(!seg) return;
+    const filled = [
+      Array.isArray(seg.proteins) && seg.proteins.length,
+      Array.isArray(seg.carbs) && seg.carbs.length,
+      Array.isArray(seg.fats) && seg.fats.length,
+      Array.isArray(seg.micros) && seg.micros.length
+    ].filter(Boolean).length;
+    const bars = [...els.sheetProgress.querySelectorAll("span")];
+    const activeBars = Math.min(bars.length, Math.max(0, Math.ceil((filled / 4) * bars.length)));
+    bars.forEach((bar, idx) => bar.classList.toggle("on", idx < activeBars));
+  }
+
   function refreshSegmentStatus(dateKey, segId){
     const day = getDay(dateKey);
     const seg = day.segments[segId];
     if(!seg || !els.segStatus) return;
     setSegmentedActive(els.segStatus, seg.status || "unlogged");
+    updateSegmentProgress(dateKey, segId);
   }
 
   function openSegment(dateKey, segId){
@@ -68,6 +85,12 @@ export function createSegmentEditor({
     const tag = def ? def.sub : "";
     const last = seg.tsLast ? ` • logged ${new Date(seg.tsLast).toLocaleTimeString([], {hour:"2-digit", minute:"2-digit"})}` : "";
     els.sheetSub.textContent = `${tag} • ${range}${last}`;
+    if(els.sheetWindowLabel){
+      els.sheetWindowLabel.textContent = (def && def.sub) ? def.sub.toUpperCase() : "WINDOW";
+    }
+    if(els.sheetWindowTime){
+      els.sheetWindowTime.textContent = range || "—";
+    }
 
     els.ftnModeRow.classList.toggle("hidden", segId !== "ftn");
     if(segId === "ftn"){
@@ -92,6 +115,7 @@ export function createSegmentEditor({
     renderChipSet(els.chipsMicros, state.rosters.micros, seg.micros, rosterSearch.micros, escapeHtml);
 
     updateSheetHints(dateKey, segId);
+    updateSegmentProgress(dateKey, segId);
 
     els.sheet.classList.remove("hidden");
     els.sheet.setAttribute("aria-hidden", "false");

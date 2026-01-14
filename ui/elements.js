@@ -35,6 +35,7 @@ export function getElements(){
     sunDot: document.getElementById("sunDot"),
     sunGlow: document.getElementById("sunGlow"),
     sunTime: document.getElementById("sunTime"),
+    currentTime: document.getElementById("currentTime"),
 
     // rituals
     movedBeforeLunch: document.getElementById("movedBeforeLunch"),
@@ -59,6 +60,7 @@ export function getElements(){
     notes: document.getElementById("notes"),
     notesBlock: document.getElementById("notesBlock"),
     redactionBanner: document.getElementById("redactionBanner"),
+    fabEdit: document.getElementById("fabEdit"),
     appLockOverlay: document.getElementById("appLockOverlay"),
     appLockInput: document.getElementById("appLockInput"),
     appLockSubmit: document.getElementById("appLockSubmit"),
@@ -150,6 +152,9 @@ export function getElements(){
     clearSegment: document.getElementById("clearSegment"),
     sheetTitle: document.getElementById("sheetTitle"),
     sheetSub: document.getElementById("sheetSub"),
+    sheetWindowLabel: document.getElementById("sheetWindowLabel"),
+    sheetWindowTime: document.getElementById("sheetWindowTime"),
+    sheetProgress: document.getElementById("sheetProgress"),
     ftnModeRow: document.getElementById("ftnModeRow"),
     ftnModeSeg: document.getElementById("ftnModeSeg"),
 
