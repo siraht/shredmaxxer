@@ -1,6 +1,7 @@
 // @ts-check
 
 import { createRosterItem, normalizeLabel, generateId } from "../domain/roster.js";
+import { createInsightsState } from "../domain/insights.js";
 import { createDefaultRosters, findDefaultRosterTemplate } from "../domain/roster_defaults.js";
 import { normalizeTri } from "../domain/heuristics.js";
 
@@ -213,6 +214,7 @@ export function migrateV3ToV4(v3State, options = {}){
     },
     settings,
     rosters: finalRosters,
+    insights: createInsightsState(),
     logs
   };
 }

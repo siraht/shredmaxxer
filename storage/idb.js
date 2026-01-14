@@ -1,12 +1,13 @@
 // @ts-check
 
 const DB_NAME = "shredmaxx_solar_log";
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 
 const STORES = {
   meta: "meta",
   settings: "settings",
   rosters: "rosters",
+  insights: "insights",
   logs: "logs",
   snapshots: "snapshots"
 };
@@ -110,8 +111,9 @@ export const idbAdapter = {
     const meta = await getSingleton(db, STORES.meta, "meta");
     const settings = await getSingleton(db, STORES.settings, "settings");
     const rosters = await getSingleton(db, STORES.rosters, "rosters");
+    const insights = await getSingleton(db, STORES.insights, "insights");
     const logs = await getAllByKey(db, STORES.logs);
-    return { meta, settings, rosters, logs };
+    return { meta, settings, rosters, insights, logs };
   },
 
   async saveDay(dateKey, dayLog){
@@ -127,6 +129,11 @@ export const idbAdapter = {
   async saveRosters(rosters){
     const db = await openDatabase();
     await setSingleton(db, STORES.rosters, "rosters", rosters);
+  },
+
+  async saveInsights(insights){
+    const db = await openDatabase();
+    await setSingleton(db, STORES.insights, "insights", insights);
   },
 
   async saveMeta(meta){
@@ -179,10 +186,11 @@ export const idbAdapter = {
     const rosters = has(state, "rosters") ? state.rosters : null;
     const logs = has(state, "logs") && state.logs ? state.logs : {};
 
-    const tx = db.transaction([STORES.meta, STORES.settings, STORES.rosters, STORES.logs], "readwrite");
+    const tx = db.transaction([STORES.meta, STORES.settings, STORES.rosters, STORES.insights, STORES.logs], "readwrite");
     tx.objectStore(STORES.meta).put(meta, "meta");
     tx.objectStore(STORES.settings).put(settings, "settings");
     tx.objectStore(STORES.rosters).put(rosters, "rosters");
+    tx.objectStore(STORES.insights).put(has(state, "insights") ? state.insights : null, "insights");
     tx.objectStore(STORES.logs).clear();
     for(const [k, v] of Object.entries(logs)){
       tx.objectStore(STORES.logs).put(v, k);

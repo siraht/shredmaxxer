@@ -4,6 +4,7 @@ import { idbAdapter, isIndexedDbAvailable, openDatabase } from "./idb.js";
 import { localAdapter } from "./local.js";
 import { checkPersistStatus, requestPersist } from "./persist.js";
 import { APP_VERSION, buildMeta, isMetaEqual } from "./meta.js";
+import { createInsightsState } from "../domain/insights.js";
 
 let adapterPromise = null;
 let mode = "localStorage";
@@ -62,10 +63,11 @@ export const storageAdapter = {
       persistStatus,
       appVersion: APP_VERSION
     });
+    const insights = state?.insights ? state.insights : createInsightsState();
     if(!isMetaEqual(state?.meta, nextMeta)){
       await adapter.saveMeta(nextMeta);
     }
-    return { ...state, meta: nextMeta };
+    return { ...state, meta: nextMeta, insights };
   },
   async saveDay(dateKey, dayLog){
     const adapter = await resolveAdapter();
@@ -82,6 +84,12 @@ export const storageAdapter = {
   async saveMeta(meta){
     const adapter = await resolveAdapter();
     return adapter.saveMeta(meta);
+  },
+  async saveInsights(insights){
+    const adapter = await resolveAdapter();
+    if(typeof adapter.saveInsights === "function"){
+      return adapter.saveInsights(insights);
+    }
   },
   async listSnapshots(){
     const adapter = await resolveAdapter();
