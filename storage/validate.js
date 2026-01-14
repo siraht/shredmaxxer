@@ -338,6 +338,47 @@ function validateLogs(logs, errors, path){
 }
 
 /**
+ * @param {unknown} insights
+ * @param {string[]} errors
+ * @param {string} path
+ */
+function validateInsights(insights, errors, path){
+  if(insights === undefined || insights === null) return;
+  if(!isPlainObject(insights)){
+    pushError(errors, `${path} must be an object.`);
+    return;
+  }
+  if(!isPlainObject(insights.dismissed)){
+    pushError(errors, `${path}.dismissed must be an object.`);
+    return;
+  }
+
+  const validateScope = (scopeMap, scopePath) => {
+    if(!isPlainObject(scopeMap)){
+      pushError(errors, `${scopePath} must be an object keyed by scope.`);
+      return;
+    }
+    for(const [scopeKey, rules] of Object.entries(scopeMap)){
+      if(!isPlainObject(rules)){
+        pushError(errors, `${scopePath}[${scopeKey}] must be an object of ruleId->timestamp.`);
+        continue;
+      }
+      for(const [ruleId, ts] of Object.entries(rules)){
+        if(!isString(ruleId)){
+          pushError(errors, `${scopePath}[${scopeKey}] has a non-string rule id.`);
+        }
+        if(!isString(ts)){
+          pushError(errors, `${scopePath}[${scopeKey}].${ruleId} must be a timestamp string.`);
+        }
+      }
+    }
+  };
+
+  validateScope(insights.dismissed.day, `${path}.dismissed.day`);
+  validateScope(insights.dismissed.week, `${path}.dismissed.week`);
+}
+
+/**
  * Validate a v4 import payload before any writes.
  * @param {unknown} payload
  * @returns {ValidationResult}
@@ -385,6 +426,7 @@ export function validateImportPayload(payload){
 
   validateSettings(payload.settings, errors, "settings");
   validateRosters(payload.rosters, errors, "rosters");
+  validateInsights(payload.insights, errors, "insights");
   validateLogs(payload.logs, errors, "logs");
 
   return { ok: errors.length === 0, errors, version: 4 };

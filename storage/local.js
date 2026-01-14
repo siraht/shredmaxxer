@@ -3,6 +3,7 @@
 const KEY_META = "shredmaxx_v4_meta";
 const KEY_SETTINGS = "shredmaxx_v4_settings";
 const KEY_ROSTERS = "shredmaxx_v4_rosters";
+const KEY_INSIGHTS = "shredmaxx_v4_insights";
 const KEY_LOGS = "shredmaxx_v4_logs";
 const KEY_SNAPSHOTS = "shredmaxx_v4_snapshots";
 
@@ -39,6 +40,7 @@ export const localAdapter = {
       meta: readJson(KEY_META, null),
       settings: readJson(KEY_SETTINGS, null),
       rosters: readJson(KEY_ROSTERS, null),
+      insights: readJson(KEY_INSIGHTS, null),
       logs: readJson(KEY_LOGS, {})
     };
   },
@@ -55,6 +57,10 @@ export const localAdapter = {
 
   async saveRosters(rosters){
     writeJson(KEY_ROSTERS, rosters);
+  },
+
+  async saveInsights(insights){
+    writeJson(KEY_INSIGHTS, insights);
   },
 
   async saveMeta(meta){
@@ -104,6 +110,7 @@ export const localAdapter = {
     writeJson(KEY_META, state?.meta || null);
     writeJson(KEY_SETTINGS, state?.settings || null);
     writeJson(KEY_ROSTERS, state?.rosters || null);
+    writeJson(KEY_INSIGHTS, state?.insights || null);
     writeJson(KEY_LOGS, state?.logs || {});
   }
 };

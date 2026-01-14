@@ -4,6 +4,7 @@ import { parseImportText } from "./import.js";
 import { mergeDay, mergeRosters } from "./merge.js";
 import { savePreImportSnapshot } from "./snapshots.js";
 import { validateImportPayload } from "./validate.js";
+import { createInsightsState, mergeInsightsState } from "../domain/insights.js";
 
 /**
  * @typedef {Object} ImportApplyResult
@@ -26,6 +27,7 @@ export function sanitizeImportPayload(payload){
     meta: payload.meta,
     settings: payload.settings,
     rosters: payload.rosters,
+    insights: payload.insights,
     logs: payload.logs
   };
 }
@@ -67,7 +69,11 @@ export function mergeStates(currentState, incomingState, options = {}){
   const merged = {
     ...base,
     rosters: mergeRosters(base.rosters, inc.rosters, options),
-    logs: mergeLogs(base.logs, inc.logs, options)
+    logs: mergeLogs(base.logs, inc.logs, options),
+    insights: mergeInsightsState(
+      base.insights || createInsightsState(),
+      inc.insights || createInsightsState()
+    )
   };
 
   if(!base.version && inc.version){
