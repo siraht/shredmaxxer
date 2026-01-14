@@ -1,6 +1,6 @@
 /* App-shell cache with explicit versioning */
 const CACHE_PREFIX = "shredmaxx-app-shell";
-const CACHE_VERSION = "v4-0.11";
+const CACHE_VERSION = "v4-0.14";
 const CACHE_NAME = `${CACHE_PREFIX}-${CACHE_VERSION}`;
 const RUNTIME_CACHE = "shredmaxx-runtime-v1";
 
@@ -15,6 +15,7 @@ const ASSETS = [
   "./app/import_logic.js",
   "./app/router.js",
   "./app/render_scheduler.js",
+  "./app/safe_mode.js",
   "./app/shell.js",
   "./app/store.js",
   "./app/reducer.js",
@@ -43,6 +44,7 @@ const ASSETS = [
   "./ui/screens/segment_editor.js",
   "./ui/screens/segment_editor_wiring.js",
   "./domain/schema.js",
+  "./domain/indexes.js",
   "./domain/hlc.js",
   "./domain/hlc_clock.js",
   "./domain/time.js",
@@ -66,6 +68,7 @@ const ASSETS = [
   "./storage/localStorage.js",
   "./storage/persist.js",
   "./storage/meta.js",
+  "./storage/audit_log.js",
   "./storage/export.js",
   "./storage/csv_export.js",
   "./storage/encrypted_export.js",
