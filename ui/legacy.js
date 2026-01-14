@@ -432,6 +432,11 @@ export function createLegacyUI(ctx){
 
   function refreshAppLock(){
     if(!els.appLockOverlay) return;
+    if(!canUseCrypto()){
+      appLocked = false;
+      hideAppLockOverlay();
+      return;
+    }
     const enabled = isAppLockEnabled();
     const hasSecret = hasAppLockSecret();
     if(!enabled || !hasSecret){
@@ -444,6 +449,10 @@ export function createLegacyUI(ctx){
     }else{
       hideAppLockOverlay();
     }
+  }
+
+  function applyAppLock(){
+    refreshAppLock();
   }
 
   async function attemptUnlock(){
@@ -2110,13 +2119,18 @@ export function createLegacyUI(ctx){
         }
       }else if(!nextAppLock && wasAppLock){
         if(hasPasscode){
-          const ok = await verifyExistingPasscode("Enter passcode to disable app lock:");
-          if(!ok){
-            nextAppLock = true;
-            if(els.privacyAppLockToggle) els.privacyAppLockToggle.checked = true;
-          }else{
+          if(!canUseCrypto()){
             clearAppLockRecord();
             appLocked = false;
+          }else{
+            const ok = await verifyExistingPasscode("Enter passcode to disable app lock:");
+            if(!ok){
+              nextAppLock = true;
+              if(els.privacyAppLockToggle) els.privacyAppLockToggle.checked = true;
+            }else{
+              clearAppLockRecord();
+              appLocked = false;
+            }
           }
         }else{
           clearAppLockRecord();
@@ -2432,7 +2446,7 @@ export function createLegacyUI(ctx){
 
   function init(){
     wire();
-    appLocked = isAppLockEnabled() && hasAppLockSecret();
+    appLocked = isAppLockEnabled() && hasAppLockSecret() && canUseCrypto();
     setActiveTab("today");
     renderAll();
     refreshAppLock();
