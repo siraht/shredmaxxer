@@ -31,6 +31,7 @@ npx playwright@latest install --with-deps
 ## Intended usage
 - E2E harness uses Playwright via `node scripts/run-e2e.mjs`.
 - Browser-only unit runner uses `node scripts/run-browser-tests.mjs` (Playwright).
+- Both runners now start a local test server (`scripts/test_server.mjs`) that serves the app and a same-origin `/api/sync/v1` stub for hosted-sync e2e coverage.
 
 ## Commands
 Install Playwright once (dev-only):
@@ -50,11 +51,12 @@ Optional env vars:
 - `--filter=privacy` (run tests matching substring)
 
 ## Output paths
-All artifacts are written under `artifacts/e2e/`:
-- `logs/run-<timestamp>.jsonl` (JSONL event log)
-- `screenshots/<test>-<timestamp>.png` (on failure)
-- `traces/<test>-<timestamp>.zip` (on failure)
-- `videos/<test>/` (per-test video directory)
+All artifacts are written under `artifacts/e2e/` in a per-run folder:
+- `runs/<run_id>/manifest.json` (run summary + per-test artifact index)
+- `runs/<run_id>/logs/run-<run_id>.jsonl` (JSONL event log)
+- `runs/<run_id>/screenshots/<test>-<timestamp>.png` (on failure)
+- `runs/<run_id>/traces/<test>-<timestamp>.zip` (on failure)
+- `runs/<run_id>/videos/<test>/` (per-test video directory)
 
 ## Notes
 - If we adopt Playwright, update `AGENTS.md` Tooling Notes to mention npm is required for test tooling only.

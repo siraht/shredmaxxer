@@ -50,6 +50,8 @@ Notes:
 - `domain/roster_edit.js` -> `domain/roster_edit.test.mjs`
 - `domain/insights.js` -> `domain/insights.test.mjs` (partial)
 - `domain/search.js` -> `domain/search.test.mjs`
+- `domain/indexes.js` -> `domain/indexes.test.mjs`
+- `domain/hlc_clock.js` -> `domain/hlc_clock.test.mjs`
 
 ### Storage
 - `storage/adapter.js` -> `tests/browser/adapter_idb.test.mjs` (browser-only smoke)
@@ -63,9 +65,13 @@ Notes:
 - `storage/migrate_v3.js` -> `storage/migrate_v3.test.mjs`
 - `storage/validate.js` -> `storage/validate.test.mjs`
 - `storage/snapshots.js` -> `storage/snapshots.test.mjs` (partial)
+- `storage/audit_log.js` -> `tests/browser/audit_log.test.mjs` (browser-only)
+- `storage/outbox.js` -> `tests/browser/outbox.test.mjs` (browser-only)
 - `storage/csv.js` -> `storage/csv.test.mjs`
 - `storage/csv_export.js` -> `storage/csv_export.test.mjs`
 - `storage/encrypted_export.js` -> `storage/encrypted_export.test.mjs` (requires WebCrypto)
+- `storage/remote_client.js` -> `storage/remote_client.test.mjs`
+- `storage/persist.js` -> `tests/browser/persist.test.mjs` (browser-only)
 
 ### App/UI/PWA
 - `app.js` -> no automated tests
