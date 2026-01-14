@@ -789,6 +789,42 @@ body{
   max-width: 60%;
   word-break: break-word;
 }
+.snapshot-list{
+  display:flex;
+  flex-direction:column;
+  gap: 8px;
+  margin-top: 10px;
+}
+.snapshot-item{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap: 12px;
+  padding: 8px 10px;
+  border-radius: var(--radius2);
+  border: 1px solid rgba(255,255,255,.08);
+  background: rgba(0,0,0,.16);
+}
+.snapshot-meta{
+  display:flex;
+  flex-direction:column;
+  gap: 4px;
+  font-size: 12px;
+  min-width: 0;
+}
+.snapshot-label{
+  color: var(--text);
+  font-size: 12px;
+}
+.snapshot-time{
+  color: var(--muted);
+  font-size: 11px;
+}
+.snapshot-actions{
+  display:flex;
+  gap: 6px;
+  flex-shrink: 0;
+}
 
 /* --- Review --- */
 .review-matrix{
@@ -815,6 +851,29 @@ body{
   color: var(--text);
   font-size: 11px;
   padding: 6px 10px;
+}
+.review-correlations{
+  display:flex;
+  flex-direction:column;
+  gap: 8px;
+  margin-top: 10px;
+}
+.corr-row{
+  padding: 8px 10px;
+  border-radius: var(--radius2);
+  border: 1px solid rgba(255,255,255,.10);
+  background: rgba(255,255,255,.03);
+}
+.corr-title{
+  font-size: 11px;
+  letter-spacing: .05em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 4px;
+}
+.corr-line{
+  font-size: 12px;
+  color: var(--text);
 }
 .matrix-row{
   display:grid;
@@ -844,6 +903,12 @@ body{
   font-size: 12px;
   text-align:center;
   color: var(--text);
+}
+.matrix-cell[data-col]{
+  cursor:pointer;
+}
+.matrix-cell[data-col]:hover{
+  color: var(--sun);
 }
 .matrix-cell.empty{
   color: var(--muted);

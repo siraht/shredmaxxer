@@ -175,6 +175,10 @@
             <span class="diagnostic-value" id="diagPersistStatus">—</span>
           </div>
           <div class="diagnostic-row">
+            <span class="diagnostic-label">Schema version:</span>
+            <span class="diagnostic-value" id="diagSchemaVersion">—</span>
+          </div>
+          <div class="diagnostic-row">
             <span class="diagnostic-label">App version:</span>
             <span class="diagnostic-value" id="diagAppVersion">—</span>
           </div>
@@ -187,6 +191,10 @@
             <span class="diagnostic-value" id="diagSnapshotCount">—</span>
           </div>
         </div>
+        <div class="row gap mt">
+          <button class="btn ghost" id="snapshotCreate" type="button">Create snapshot now</button>
+        </div>
+        <div class="snapshot-list" id="snapshotList"></div>
       </div>
     </section>
 
@@ -198,6 +206,7 @@
         <div class="review-summary" id="reviewSummary"></div>
         <div class="tiny muted" id="reviewPhase"></div>
         <div class="review-issues" id="reviewIssues"></div>
+        <div class="review-correlations" id="reviewCorrelations"></div>
         <div class="review-matrix" id="coverageMatrix"></div>
       </div>
 
@@ -282,6 +291,15 @@
               <option value="nowfade">Fade future</option>
             </select>
             <div class="field-help">Keeps the interface calm in the morning.</div>
+          </div>
+
+          <div class="field">
+            <label class="field-label" for="setWeekStart">Week starts</label>
+            <select class="field-input" id="setWeekStart">
+              <option value="0">Sunday</option>
+              <option value="1">Monday</option>
+            </select>
+            <div class="field-help">Used for Weekly Review ranges.</div>
           </div>
         </div>
 

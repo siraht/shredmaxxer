@@ -763,33 +763,115 @@ export function createLegacyUI(ctx){
     return { collision, seedOil, highFat };
   }
 
+  function formatSnapshotTime(ts){
+    const d = new Date(ts);
+    if(Number.isNaN(d.getTime())) return String(ts || "");
+    return d.toLocaleString([], { year: "numeric", month: "short", day: "2-digit", hour: "2-digit", minute: "2-digit" });
+  }
+
+  function renderSnapshotList(list){
+    if(!els.snapshotList) return;
+    const items = Array.isArray(list) ? list : [];
+    if(items.length === 0){
+      els.snapshotList.innerHTML = `<div class="tiny muted">No snapshots yet.</div>`;
+      return;
+    }
+
+    const sorted = [...items].sort((a, b) => String(b.ts).localeCompare(String(a.ts)));
+    els.snapshotList.innerHTML = sorted.map((snap) => {
+      const label = snap?.label ? String(snap.label) : "Snapshot";
+      const ts = snap?.ts ? String(snap.ts) : "";
+      const pretty = formatSnapshotTime(ts);
+      return `
+        <div class="snapshot-item" data-snapshot-id="${escapeHtml(String(snap?.id || ""))}" data-snapshot-label="${escapeHtml(label)}" data-snapshot-time="${escapeHtml(pretty)}">
+          <div class="snapshot-meta">
+            <div class="snapshot-label">${escapeHtml(label)}</div>
+            <div class="snapshot-time">${escapeHtml(pretty)}</div>
+          </div>
+          <div class="snapshot-actions">
+            <button class="btn small ghost" type="button" data-action="restore">Restore</button>
+            <button class="btn small ghost" type="button" data-action="delete">Delete</button>
+          </div>
+        </div>
+      `;
+    }).join("");
+
+    els.snapshotList.querySelectorAll("[data-action]").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        const row = btn.closest(".snapshot-item");
+        const snapshotId = row?.dataset?.snapshotId;
+        if(!snapshotId) return;
+        const label = row?.dataset?.snapshotLabel || "Snapshot";
+        const time = row?.dataset?.snapshotTime || "";
+        if(btn.dataset.action === "restore"){
+          if(!confirm(`Restore snapshot \"${label}\" (${time})? This will replace current data.`)) return;
+          try{
+            undoState = null;
+            await actions.restoreSnapshot(snapshotId);
+            renderAll();
+            showUndoToast("Snapshot restored");
+          }catch(e){
+            showUndoToast("Snapshot restore failed");
+          }
+          return;
+        }
+        if(btn.dataset.action === "delete"){
+          if(!confirm(`Delete snapshot \"${label}\" (${time})? This cannot be undone.`)) return;
+          try{
+            await actions.deleteSnapshot(snapshotId);
+            renderDiagnostics();
+            showUndoToast("Snapshot deleted");
+          }catch(e){
+            showUndoToast("Snapshot delete failed");
+          }
+        }
+      });
+    });
+  }
+
   function renderDiagnostics(){
     if(!els.diagStorageMode) return;
-    const meta = getState().meta || {};
+    const state = getState();
+    const meta = state.meta || {};
     const setValue = (el, value) => {
       if(!el) return;
       el.textContent = value || "—";
     };
     setValue(els.diagStorageMode, meta.storageMode);
     setValue(els.diagPersistStatus, meta.persistStatus);
+    setValue(els.diagSchemaVersion, String(meta.version || state.version || ""));
     setValue(els.diagAppVersion, meta.appVersion);
     setValue(els.diagInstallId, meta.installId);
-    if(els.diagSnapshotCount){
+    if(els.diagSnapshotCount || els.snapshotList){
       const requestId = ++diagSnapshotSeq;
-      setValue(els.diagSnapshotCount, "...");
+      if(els.diagSnapshotCount){
+        setValue(els.diagSnapshotCount, "...");
+      }
+      if(els.snapshotList){
+        els.snapshotList.innerHTML = `<div class="tiny muted">Loading…</div>`;
+      }
       if(typeof actions.listSnapshots === "function"){
         actions.listSnapshots()
           .then((list) => {
             if(requestId !== diagSnapshotSeq) return;
-            const count = Array.isArray(list) ? list.length : 0;
-            setValue(els.diagSnapshotCount, String(count));
+            const items = Array.isArray(list) ? list : [];
+            if(els.diagSnapshotCount){
+              setValue(els.diagSnapshotCount, String(items.length));
+            }
+            renderSnapshotList(items);
           })
           .catch(() => {
             if(requestId !== diagSnapshotSeq) return;
-            setValue(els.diagSnapshotCount, "—");
+            if(els.diagSnapshotCount){
+              setValue(els.diagSnapshotCount, "—");
+            }
+            renderSnapshotList([]);
           });
       }else{
-        setValue(els.diagSnapshotCount, "—");
+        if(els.diagSnapshotCount){
+          setValue(els.diagSnapshotCount, "—");
+        }
+        renderSnapshotList([]);
       }
     }
   }
@@ -876,6 +958,21 @@ export function createLegacyUI(ctx){
       els.reviewPhase.textContent = summary.phaseLabel || "";
     }
 
+    if(els.reviewCorrelations){
+      const correlations = Array.isArray(summary.correlations) ? summary.correlations : [];
+      const fmtAvg = (value) => (value == null ? "—" : value.toFixed(2));
+      const rows = correlations.map((entry) => {
+        const line = `${entry.a.label}: ${fmtAvg(entry.a.avg)} (n=${entry.a.count}) vs ${entry.b.label}: ${fmtAvg(entry.b.avg)} (n=${entry.b.count})`;
+        return `
+          <div class="corr-row">
+            <div class="corr-title">${escapeHtml(entry.label)}</div>
+            <div class="corr-line">${escapeHtml(line)} • Observed in ${entry.total} days</div>
+          </div>
+        `;
+      }).join("");
+      els.reviewCorrelations.innerHTML = rows || `<div class="tiny muted">No correlations yet.</div>`;
+    }
+
     const head = `
       <div class="matrix-row matrix-head">
         <div class="matrix-date">Day</div>
@@ -890,35 +987,43 @@ export function createLegacyUI(ctx){
     `;
 
     const rows = matrix.map((row) => {
-      const cell = (value) => {
+      const cell = (value, col) => {
         const empty = value === 0 || value === "—";
         const content = (value === 0) ? "—" : value;
         const cls = empty ? "matrix-cell empty" : "matrix-cell";
-        return `<div class="${cls}">${content}</div>`;
+        return `<div class="${cls}" data-col="${col}">${content}</div>`;
       };
-      const flag = (on, glyph) => `<div class="matrix-cell flag ${on ? "on" : "empty"}">${on ? glyph : "—"}</div>`;
+      const flag = (on, glyph, col) => `<div class="matrix-cell flag ${on ? "on" : "empty"}" data-col="${col}">${on ? glyph : "—"}</div>`;
       return `
         <div class="matrix-row" data-date="${escapeHtml(row.dateKey)}">
           <div class="matrix-date">${escapeHtml(row.dateKey)}</div>
-          ${cell(row.counts.proteins)}
-          ${cell(row.counts.carbs)}
-          ${cell(row.counts.fats)}
-          ${cell(row.counts.micros)}
-          ${flag(row.flags.collision, "×")}
-          ${flag(row.flags.seedOil, "⚠")}
-          ${flag(row.flags.highFat, "◎")}
+          ${cell(row.counts.proteins, "proteins")}
+          ${cell(row.counts.carbs, "carbs")}
+          ${cell(row.counts.fats, "fats")}
+          ${cell(row.counts.micros, "micros")}
+          ${flag(row.flags.collision, "×", "collision")}
+          ${flag(row.flags.seedOil, "⚠", "seedOil")}
+          ${flag(row.flags.highFat, "◎", "highFat")}
         </div>
       `;
     }).join("");
 
     els.coverageMatrix.innerHTML = head + rows;
     els.coverageMatrix.querySelectorAll(".matrix-row[data-date]").forEach((row) => {
-      row.addEventListener("click", () => {
+      row.addEventListener("click", (e) => {
         const key = row.dataset.date;
         if(!key) return;
+        const target = e.target.closest(".matrix-cell");
+        const col = target?.dataset?.col || "";
         setCurrentDate(new Date(key + "T12:00:00"));
         setActiveTab("today");
         renderToday();
+        if(col){
+          const segId = findSegmentForMatrixCell(getDay(key), col);
+          if(segId){
+            openSegment(key, segId);
+          }
+        }
       });
     });
 
@@ -944,6 +1049,43 @@ export function createLegacyUI(ctx){
       }).join("");
       els.rotationPicks.innerHTML = rowsHtml;
     }
+  }
+
+  function findSegmentForMatrixCell(day, col){
+    const order = ["ftn", "lunch", "dinner", "late"];
+    const segments = day?.segments || {};
+    const state = getState();
+
+    if(["proteins", "carbs", "fats", "micros"].includes(col)){
+      for(const id of order){
+        const seg = segments[id];
+        if(seg && Array.isArray(seg[col]) && seg[col].length){
+          return id;
+        }
+      }
+      return null;
+    }
+
+    if(col === "seedOil"){
+      for(const id of order){
+        const seg = segments[id];
+        if(seg?.seedOil === "yes") return id;
+      }
+      return null;
+    }
+
+    if(col === "collision" || col === "highFat"){
+      for(const id of order){
+        const seg = segments[id];
+        if(!seg) continue;
+        const effective = effectiveSegmentFlags(seg, state.rosters);
+        if(col === "collision" && effective.collision.value) return id;
+        if(col === "highFat" && effective.highFatMeal.value) return id;
+      }
+      return null;
+    }
+
+    return null;
   }
 
   function setImportStatus(message, isError){
@@ -1118,6 +1260,10 @@ export function createLegacyUI(ctx){
     els.setSunMode.value = s.sunMode || "manual";
     els.setPhase.value = s.phase || "";
     els.setFocusMode.value = s.focusMode || "nowfade";
+    if(els.setWeekStart){
+      const weekStart = Number.isFinite(s.weekStart) ? s.weekStart : 0;
+      els.setWeekStart.value = String(weekStart);
+    }
 
     const autoSun = (s.sunMode === "auto");
     els.setSunrise.disabled = autoSun;
@@ -1266,8 +1412,23 @@ export function createLegacyUI(ctx){
       });
     }
 
+    if(els.snapshotCreate){
+      els.snapshotCreate.addEventListener("click", async () => {
+        if(typeof actions.createSnapshot !== "function") return;
+        try{
+          undoState = null;
+          await actions.createSnapshot("Manual snapshot");
+          renderDiagnostics();
+          showUndoToast("Snapshot saved");
+        }catch(e){
+          showUndoToast("Snapshot failed");
+        }
+      });
+    }
+
     // settings save/reset
     els.saveSettings.addEventListener("click", () => {
+      const parsedWeekStart = Number.parseInt(els.setWeekStart?.value || "", 10);
       const s = {
         dayStart: els.setDayStart.value || defaults.DEFAULT_SETTINGS.dayStart,
         dayEnd: els.setDayEnd.value || defaults.DEFAULT_SETTINGS.dayEnd,
@@ -1278,7 +1439,8 @@ export function createLegacyUI(ctx){
         sunset: els.setSunset.value || defaults.DEFAULT_SETTINGS.sunset,
         sunMode: els.setSunMode.value || "manual",
         phase: els.setPhase.value || "",
-        focusMode: els.setFocusMode.value || "nowfade"
+        focusMode: els.setFocusMode.value || "nowfade",
+        weekStart: Number.isFinite(parsedWeekStart) ? parsedWeekStart : defaults.DEFAULT_SETTINGS.weekStart
       };
 
       captureUndo("Settings saved", () => actions.updateSettings(s));
