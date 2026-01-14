@@ -1,0 +1,22 @@
+{
+  "name": "Shredmaxx \u2014 Solar Log",
+  "short_name": "Shredmaxx",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#050714",
+  "theme_color": "#070913",
+  "description": "Local-first tracker for the Shredmaxxing protocol with time-of-day segments and food diversity.",
+  "icons": [
+    {
+      "src": "icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}

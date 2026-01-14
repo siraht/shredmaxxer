@@ -1,0 +1,64 @@
+// @ts-check
+
+import { buildTagIndex, computeCollisionAuto, computeHighFatMealAuto, computeSegmentFlags } from "./flags.js";
+
+/**
+ * @typedef {import("./schema.js").Tri} Tri
+ * @typedef {import("./schema.js").SegmentLog} SegmentLog
+ * @typedef {import("./schema.js").Rosters} Rosters
+ */
+
+/**
+ * Normalize tri-state values. Empty/unknown values fall back to "auto".
+ * @param {Tri | string | null | undefined} value
+ * @returns {"auto"|"yes"|"no"}
+ */
+export function normalizeTri(value){
+  if(value === true) return "yes";
+  if(value === false) return "no";
+  if(value === "yes" || value === "no" || value === "auto") return value;
+  if(value === "" || value == null) return "auto";
+  return "auto";
+}
+
+/**
+ * Compute effective flags for a segment (tri-state overrides + auto rule).
+ * Includes auto booleans for diagnostics/UX hints.
+ * @param {SegmentLog} segment
+ * @param {Rosters} rosters
+ * @returns {{
+ *  collision: { value: boolean, source: "auto"|"yes"|"no" },
+ *  highFatMeal: { value: boolean, source: "auto"|"yes"|"no" },
+ *  collisionAuto: boolean,
+ *  highFatMealAuto: boolean,
+ *  seedOilHint: boolean
+ * }}
+ */
+export function effectiveSegmentFlags(segment, rosters){
+  const tagIndex = buildTagIndex(rosters || {});
+  const collisionOverride = normalizeTri(segment?.collision);
+  const highFatOverride = normalizeTri(segment?.highFatMeal);
+  const normalizedSegment = {
+    ...segment,
+    collision: collisionOverride,
+    highFatMeal: highFatOverride
+  };
+  const computed = computeSegmentFlags(normalizedSegment, tagIndex);
+  return {
+    collision: {
+      value: computed.collisionEffective === "yes",
+      source: collisionOverride === "auto" ? "auto" : collisionOverride
+    },
+    highFatMeal: {
+      value: computed.highFatMealEffective === "yes",
+      source: highFatOverride === "auto" ? "auto" : highFatOverride
+    },
+    collisionAuto: computed.collisionAuto,
+    highFatMealAuto: computed.highFatMealAuto,
+    seedOilHint: computed.seedOilHint
+  };
+}
+
+export { buildTagIndex, computeCollisionAuto, computeHighFatMealAuto };
+
+export {};

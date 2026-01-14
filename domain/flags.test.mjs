@@ -1,0 +1,37 @@
+// @ts-check
+
+import { buildTagIndex, computeCollisionAuto, computeHighFatMealAuto, computeSeedOilHint, resolveTri } from "./flags.js";
+
+function assert(condition, label){
+  if(!condition){
+    throw new Error(`Assertion failed: ${label}`);
+  }
+}
+
+const rosters = {
+  carbs: [
+    { id: "c1", tags: ["carb:starch"] },
+    { id: "c2", tags: ["carb:fruit"] }
+  ],
+  fats: [
+    { id: "f1", tags: ["fat:dense"] },
+    { id: "f2", tags: ["fat:seed_oil"] }
+  ]
+};
+
+const tagIndex = buildTagIndex(rosters);
+
+const seg = { carbs: ["c1"], fats: ["f1"] };
+assert(computeCollisionAuto(seg, tagIndex) === true, "collision auto true for dense fat + starch");
+assert(computeHighFatMealAuto(seg, tagIndex) === true, "high-fat auto true for dense fat");
+assert(computeSeedOilHint(seg, tagIndex) === false, "seed oil hint false without seed oil tag");
+
+const seg2 = { carbs: ["c2"], fats: ["f2"] };
+assert(computeCollisionAuto(seg2, tagIndex) === false, "no collision for fruit + seed oil");
+assert(computeSeedOilHint(seg2, tagIndex) === true, "seed oil hint true for seed oil tag");
+
+assert(resolveTri("yes", false) === "yes", "override yes wins");
+assert(resolveTri("no", true) === "no", "override no wins");
+assert(resolveTri("", true) === "yes", "auto uses computed value");
+
+console.log("flags tests: ok");

@@ -1,0 +1,418 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#070913" />
+  <title>Shredmaxx — Solar Log</title>
+  <link rel="manifest" href="manifest.webmanifest" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div class="sky-noise" aria-hidden="true"></div>
+  <header class="topbar">
+    <div class="brand">
+      <div class="brand-mark" aria-hidden="true">
+        <span class="mark-sun">☉</span>
+        <span class="mark-ring"></span>
+      </div>
+      <div class="brand-copy">
+        <div class="brand-title">Shredmaxx</div>
+        <div class="brand-sub" id="subtitle">Solar log • local-first</div>
+      </div>
+    </div>
+
+    <nav class="tabs" aria-label="Primary">
+      <button class="tab tab-active" id="tabToday" type="button">Today</button>
+      <button class="tab" id="tabHistory" type="button">History</button>
+      <button class="tab" id="tabSettings" type="button">Settings</button>
+    </nav>
+  </header>
+
+  <main class="wrap">
+    <!-- TODAY -->
+    <section class="view" id="viewToday">
+      <div class="panel day-panel">
+        <div class="day-head">
+          <div class="date-nav">
+            <button class="icon-btn" id="prevDay" type="button" aria-label="Previous day">‹</button>
+            <input class="date" id="datePicker" type="date" />
+            <button class="icon-btn" id="nextDay" type="button" aria-label="Next day">›</button>
+          </div>
+
+          <div class="day-meta">
+            <div class="phase">
+              <div class="phase-label" id="phaseLabel">—</div>
+              <div class="phase-sub" id="phaseSub">—</div>
+            </div>
+            <button class="focus-pill" id="toggleFocus" type="button" aria-label="Toggle timeline focus">
+              <span class="focus-dot" aria-hidden="true"></span>
+              <span id="focusLabel">Full day</span>
+            </button>
+          </div>
+        </div>
+
+        <div class="timeline-shell">
+          <svg class="solar" id="solarSvg" viewBox="0 0 1000 260" preserveAspectRatio="none" aria-hidden="true">
+            <defs>
+              <filter id="softGlow" x="-40%" y="-40%" width="180%" height="180%">
+                <feGaussianBlur stdDeviation="6" result="blur"/>
+                <feColorMatrix type="matrix" values="
+                  1 0 0 0 0
+                  0 1 0 0 0
+                  0 0 1 0 0
+                  0 0 0 0.9 0" />
+                <feMerge>
+                  <feMergeNode in="blur"/>
+                  <feMergeNode in="SourceGraphic"/>
+                </feMerge>
+              </filter>
+              <linearGradient id="arcGrad" x1="0" x2="1">
+                <stop offset="0%" stop-color="var(--sunrise)"/>
+                <stop offset="50%" stop-color="var(--sun)"/>
+                <stop offset="100%" stop-color="var(--sunset)"/>
+              </linearGradient>
+            </defs>
+
+            <path id="sunArc" d="" class="sun-arc" />
+            <circle id="sunGlow" cx="0" cy="0" r="26" class="sun-glow" />
+            <circle id="sunDot" cx="0" cy="0" r="12" class="sun-dot" />
+            <text id="sunTime" x="0" y="0" class="sun-time"> </text>
+          </svg>
+
+          <div class="timeline" id="timeline">
+            <div class="timeline-track" id="timelineTrack" aria-label="Day timeline"></div>
+            <div class="now-marker" id="nowMarker" aria-hidden="true">
+              <div class="now-line"></div>
+              <div class="now-cap"></div>
+            </div>
+            <div class="fog" id="futureFog" aria-hidden="true"></div>
+          </div>
+        </div>
+
+        <div class="rituals">
+          <button class="ritual" id="movedBeforeLunch" type="button" aria-pressed="false">
+            <span class="ritual-kicker">Ritual</span>
+            <span class="ritual-title">Move pre‑lunch</span>
+            <span class="ritual-sub" id="moveSub">—</span>
+          </button>
+
+          <button class="ritual" id="trained" type="button" aria-pressed="false">
+            <span class="ritual-kicker">Output</span>
+            <span class="ritual-title">Training</span>
+            <span class="ritual-sub" id="trainSub">—</span>
+          </button>
+
+          <button class="ritual" id="highFatDay" type="button" aria-pressed="false">
+            <span class="ritual-kicker">Cycle</span>
+            <span class="ritual-title">High‑fat day</span>
+            <span class="ritual-sub" id="fatDaySub">—</span>
+          </button>
+        </div>
+
+        <div class="signals">
+          <div class="signal">
+            <div class="signal-label">Energy</div>
+            <div class="mini-scale" data-scale="energy" id="energyScale"></div>
+          </div>
+          <div class="signal">
+            <div class="signal-label">Mood</div>
+            <div class="mini-scale" data-scale="mood" id="moodScale"></div>
+          </div>
+          <div class="signal">
+            <div class="signal-label">Cravings</div>
+            <div class="mini-scale" data-scale="cravings" id="cravingsScale"></div>
+          </div>
+        </div>
+
+        <div class="notes">
+          <label class="notes-label" for="notes">Notes</label>
+          <textarea id="notes" class="notes-box" placeholder="Short signal. No essays."></textarea>
+        </div>
+      </div>
+
+      <div class="panel footer-panel">
+        <div class="tiny muted">
+          Data stays on-device unless you export/import. This is a personal tracker, not medical advice.
+        </div>
+      </div>
+    </section>
+
+    <!-- HISTORY -->
+    <section class="view hidden" id="viewHistory">
+      <div class="panel">
+        <div class="section-title">History</div>
+        <div class="history-list" id="historyList"></div>
+      </div>
+
+      <div class="panel">
+        <div class="section-title">Backup</div>
+        <div class="row gap">
+          <button class="btn" id="exportBtn" type="button">Export JSON</button>
+          <label class="btn ghost" for="importFile">Import</label>
+          <input id="importFile" type="file" accept="application/json" hidden />
+        </div>
+        <div class="row gap mt">
+          <div class="segmented small" id="importMode">
+            <button class="seg-btn" type="button" data-value="merge">Merge (default)</button>
+            <button class="seg-btn" type="button" data-value="replace">Replace</button>
+          </div>
+          <button class="btn" id="importApply" type="button" disabled>Apply import</button>
+        </div>
+        <div class="tiny muted" id="importStatus"></div>
+      </div>
+    </section>
+
+    <!-- SETTINGS -->
+    <section class="view hidden" id="viewSettings">
+      <div class="panel">
+        <div class="section-title">Time model</div>
+
+        <div class="grid2">
+          <div class="field">
+            <label class="field-label" for="setDayStart">Day starts</label>
+            <input class="field-input" id="setDayStart" type="time" />
+            <div class="field-help">Left edge of your timeline.</div>
+          </div>
+
+          <div class="field">
+            <label class="field-label" for="setDayEnd">Day ends</label>
+            <input class="field-input" id="setDayEnd" type="time" />
+            <div class="field-help">Right edge of your timeline.</div>
+          </div>
+
+          <div class="field">
+            <label class="field-label" for="setFtnEnd">FTN ends</label>
+            <input class="field-input" id="setFtnEnd" type="time" />
+            <div class="field-help">Default noon, adjustable.</div>
+          </div>
+
+          <div class="field">
+            <label class="field-label" for="setLunchEnd">Lunch window ends</label>
+            <input class="field-input" id="setLunchEnd" type="time" />
+            <div class="field-help">End of carb+protein window.</div>
+          </div>
+
+          <div class="field">
+            <label class="field-label" for="setDinnerEnd">Dinner window ends</label>
+            <input class="field-input" id="setDinnerEnd" type="time" />
+            <div class="field-help">Start of late-night segment.</div>
+          </div>
+
+          <div class="field">
+            <label class="field-label" for="setSunrise">Sunrise</label>
+            <input class="field-input" id="setSunrise" type="time" />
+            <div class="field-help">Used for the sun arc + sky.</div>
+          </div>
+
+          <div class="field">
+            <label class="field-label" for="setSunset">Sunset</label>
+            <input class="field-input" id="setSunset" type="time" />
+            <div class="field-help">Used for the sun arc + sky.</div>
+          </div>
+
+          <div class="field">
+            <label class="field-label" for="setSunMode">Sun mode</label>
+            <select class="field-input" id="setSunMode">
+              <option value="manual">Manual</option>
+              <option value="auto">Auto</option>
+            </select>
+            <div class="field-help">Auto uses on-device location when enabled.</div>
+          </div>
+
+          <div class="field">
+            <label class="field-label" for="setPhase">Phase</label>
+            <select class="field-input" id="setPhase">
+              <option value="">—</option>
+              <option value="strict">Strict</option>
+              <option value="maintenance">Maintenance</option>
+              <option value="advanced">Advanced</option>
+            </select>
+            <div class="field-help">Shown in the day header and Review.</div>
+          </div>
+
+          <div class="field">
+            <label class="field-label" for="setFocusMode">Timeline focus</label>
+            <select class="field-input" id="setFocusMode">
+              <option value="full">Full day</option>
+              <option value="nowfade">Fade future</option>
+            </select>
+            <div class="field-help">Keeps the interface calm in the morning.</div>
+          </div>
+        </div>
+
+        <div class="row gap mt">
+          <button class="btn" id="saveSettings" type="button">Save settings</button>
+          <button class="btn ghost" id="resetToday" type="button">Reset today's logs</button>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="section-title">Rosters</div>
+        <div class="tiny muted">Edit your default options. You can also add items inside a segment.</div>
+
+        <div class="roster-block">
+          <div class="roster-head">
+            <div class="roster-title">Proteins</div>
+            <button class="btn tinybtn" data-roster="proteins" type="button">+ Add</button>
+          </div>
+          <div class="roster-list" id="roster-proteins"></div>
+        </div>
+
+        <div class="roster-block">
+          <div class="roster-head">
+            <div class="roster-title">Carbs</div>
+            <button class="btn tinybtn" data-roster="carbs" type="button">+ Add</button>
+          </div>
+          <div class="roster-list" id="roster-carbs"></div>
+        </div>
+
+        <div class="roster-block">
+          <div class="roster-head">
+            <div class="roster-title">Fats</div>
+            <button class="btn tinybtn" data-roster="fats" type="button">+ Add</button>
+          </div>
+          <div class="roster-list" id="roster-fats"></div>
+        </div>
+
+        <div class="roster-block">
+          <div class="roster-head">
+            <div class="roster-title">Accoutrements (μ)</div>
+            <button class="btn tinybtn" data-roster="micros" type="button">+ Add</button>
+          </div>
+          <div class="roster-list" id="roster-micros"></div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- SEGMENT SHEET -->
+  <div class="sheet hidden" id="sheet" aria-hidden="true">
+    <div class="sheet-backdrop" id="sheetBackdrop" aria-hidden="true"></div>
+
+    <div class="sheet-panel" role="dialog" aria-modal="true" aria-labelledby="sheetTitle">
+      <div class="sheet-handle" aria-hidden="true"></div>
+      <div class="sheet-head">
+        <div>
+          <div class="sheet-title" id="sheetTitle">—</div>
+          <div class="sheet-sub" id="sheetSub">—</div>
+        </div>
+        <button class="icon-btn close" id="closeSheet" type="button" aria-label="Close">×</button>
+      </div>
+
+      <div class="sheet-body">
+        <div class="sheet-row hidden" id="ftnModeRow">
+          <div class="row-label">FTN mode</div>
+          <div class="segmented" data-segfield="ftnMode" id="ftnModeSeg">
+            <button class="seg-btn" type="button" data-value="ftn">FTN</button>
+            <button class="seg-btn" type="button" data-value="lite">Lite</button>
+            <button class="seg-btn" type="button" data-value="off">Off</button>
+          </div>
+          <div class="tiny muted">Strict = fruit only. Lite = allows non-fat dairy/collagen/MCT.</div>
+        </div>
+
+        <div class="sheet-grid">
+          <div class="sheet-block">
+            <div class="block-head">
+              <div class="block-title">Protein</div>
+              <button class="link" id="addProtein" type="button">+ add</button>
+            </div>
+            <input class="chip-search" id="searchProteins" type="search" placeholder="Search proteins" />
+            <div class="chips" id="chipsProteins"></div>
+          </div>
+
+          <div class="sheet-block">
+            <div class="block-head">
+              <div class="block-title">Carbs</div>
+              <button class="link" id="addCarb" type="button">+ add</button>
+            </div>
+            <input class="chip-search" id="searchCarbs" type="search" placeholder="Search carbs" />
+            <div class="chips" id="chipsCarbs"></div>
+          </div>
+
+          <div class="sheet-block">
+            <div class="block-head">
+              <div class="block-title">Fats</div>
+              <button class="link" id="addFat" type="button">+ add</button>
+            </div>
+            <input class="chip-search" id="searchFats" type="search" placeholder="Search fats" />
+            <div class="chips" id="chipsFats"></div>
+          </div>
+
+          <div class="sheet-block">
+            <div class="block-head">
+              <div class="block-title">Accoutrements (μ)</div>
+              <button class="link" id="addMicro" type="button">+ add</button>
+            </div>
+            <input class="chip-search" id="searchMicros" type="search" placeholder="Search accoutrements" />
+            <div class="chips" id="chipsMicros"></div>
+          </div>
+        </div>
+
+        <div class="sheet-row">
+          <div class="row-label">Meal flags</div>
+          <div class="row-controls">
+            <div class="segmented small" id="segCollision" data-segfield="collision">
+              <button class="seg-btn" type="button" data-value="auto">Collision auto</button>
+              <button class="seg-btn" type="button" data-value="yes">Collision</button>
+              <button class="seg-btn" type="button" data-value="no">No collision</button>
+            </div>
+
+            <div class="segmented small" id="segHighFat" data-segfield="highFatMeal">
+              <button class="seg-btn" type="button" data-value="auto">High‑fat auto</button>
+              <button class="seg-btn" type="button" data-value="yes">High‑fat</button>
+              <button class="seg-btn" type="button" data-value="no">Not high‑fat</button>
+            </div>
+
+            <div class="segmented small" id="segSeedOil" data-segfield="seedOil">
+              <button class="seg-btn" type="button" data-value="">—</button>
+              <button class="seg-btn" type="button" data-value="none">No seed oils</button>
+              <button class="seg-btn" type="button" data-value="yes">Seed oils</button>
+            </div>
+          </div>
+          <div class="tiny muted" id="flagHelp">Collision auto = fat:dense + carb:starch. High‑fat auto = fat:dense.</div>
+        </div>
+
+        <div class="sheet-row">
+          <div class="row-label">Status</div>
+          <div class="row-controls">
+            <div class="segmented small" id="segStatus" data-segfield="status">
+              <button class="seg-btn" type="button" data-value="unlogged">Unlogged</button>
+              <button class="seg-btn" type="button" data-value="none">None</button>
+              <button class="seg-btn" type="button" data-value="logged">Logged</button>
+            </div>
+          </div>
+          <div class="tiny muted">None = explicitly no food (clears selections).</div>
+        </div>
+
+        <div class="sheet-row">
+          <label class="row-label" for="segNotes">Segment notes</label>
+          <textarea class="notes-box" id="segNotes" placeholder="Optional. 1–2 lines."></textarea>
+        </div>
+      </div>
+
+      <div class="sheet-foot">
+        <button class="btn ghost" id="clearSegment" type="button">Clear</button>
+        <button class="btn" id="doneSegment" type="button">Done</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="update-toast" id="updateToast" hidden role="status" aria-live="polite">
+    <span>Update available</span>
+    <button class="btn small" id="updateReload" type="button">Update</button>
+  </div>
+
+  <div class="update-toast" id="undoToast" hidden role="status" aria-live="polite">
+    <span id="undoLabel">Change saved</span>
+    <button class="btn small" id="undoAction" type="button">Undo</button>
+  </div>
+
+  <div class="update-toast" id="undoToast" hidden role="status" style="bottom: 70px;">
+    <span id="undoMsg">Saved</span>
+    <button class="btn small" id="undoBtn" type="button">Undo</button>
+  </div>
+
+  <script type="module" src="app/boot.js"></script>
+</body>
+</html>
