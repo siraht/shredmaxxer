@@ -25,6 +25,7 @@
     <nav class="tabs" aria-label="Primary">
       <button class="tab tab-active" id="tabToday" type="button">Today</button>
       <button class="tab" id="tabHistory" type="button">History</button>
+      <button class="tab" id="tabReview" type="button">Review</button>
       <button class="tab" id="tabSettings" type="button">Settings</button>
     </nav>
   </header>
@@ -160,6 +161,42 @@
           <button class="btn" id="importApply" type="button" disabled>Apply import</button>
         </div>
         <div class="tiny muted" id="importStatus"></div>
+      </div>
+
+      <div class="panel">
+        <div class="section-title">Diagnostics</div>
+        <div class="diagnostics-grid">
+          <div class="diagnostic-row">
+            <span class="diagnostic-label">Storage mode:</span>
+            <span class="diagnostic-value" id="diagStorageMode">—</span>
+          </div>
+          <div class="diagnostic-row">
+            <span class="diagnostic-label">Persistent storage:</span>
+            <span class="diagnostic-value" id="diagPersistStatus">—</span>
+          </div>
+          <div class="diagnostic-row">
+            <span class="diagnostic-label">App version:</span>
+            <span class="diagnostic-value" id="diagAppVersion">—</span>
+          </div>
+          <div class="diagnostic-row">
+            <span class="diagnostic-label">Install ID:</span>
+            <span class="diagnostic-value tiny" id="diagInstallId">—</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- REVIEW -->
+    <section class="view hidden" id="viewReview">
+      <div class="panel">
+        <div class="section-title">Weekly review</div>
+        <div class="tiny muted" id="reviewRange">—</div>
+        <div class="review-matrix" id="coverageMatrix"></div>
+      </div>
+
+      <div class="panel">
+        <div class="section-title">Rotation picks</div>
+        <div class="review-picks" id="rotationPicks"></div>
       </div>
     </section>
 

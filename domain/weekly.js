@@ -1,5 +1,6 @@
 // @ts-check
 
+import { computeCoverageMatrix } from "./coverage.js";
 import { addDaysLocal, dateToKey } from "./time.js";
 
 /**
@@ -156,7 +157,8 @@ export function getPhaseTargetLabel(phase){
  *  logs: Record<string, DayLog>,
  *  anchorDate: Date,
  *  weekStart?: number,
- *  phase?: ""|"strict"|"maintenance"|"advanced"
+ *  phase?: ""|"strict"|"maintenance"|"advanced",
+ *  rosters?: any
  * }} params
  */
 export function computeWeeklySummary(params){
@@ -166,12 +168,14 @@ export function computeWeeklySummary(params){
   const uniqueCounts = computeWeeklyUniqueCounts(params.logs || {}, dateKeys);
   const ftnSummary = summarizeFtnModes(params.logs || {}, dateKeys);
   const coverage = computeSegmentCoverage(params.logs || {}, dateKeys);
+  const matrix = computeCoverageMatrix(params.logs || {}, params.rosters, dateKeys);
   const phaseLabel = getPhaseTargetLabel(params.phase || "");
   return {
     dateKeys,
     uniqueCounts,
     ftnSummary,
     coverage,
+    matrix,
     phaseLabel
   };
 }

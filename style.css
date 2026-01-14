@@ -766,6 +766,74 @@ body{
   font-size: 12px;
 }
 
+/* --- Review --- */
+.review-matrix{
+  display:flex;
+  flex-direction:column;
+  gap: 6px;
+  margin-top: 12px;
+}
+.matrix-row{
+  display:grid;
+  grid-template-columns: 94px repeat(7, minmax(26px, 1fr));
+  gap: 6px;
+  align-items:center;
+  padding: 8px;
+  border-radius: var(--radius2);
+  border: 1px solid rgba(255,255,255,.08);
+  background: rgba(255,255,255,.02);
+}
+.matrix-row.matrix-head{
+  background: rgba(255,255,255,.04);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+}
+.matrix-row[data-date]{ cursor:pointer; }
+.matrix-row[data-date]:hover{ border-color: rgba(99,215,255,.22); }
+.matrix-date{
+  font-family: ui-serif, "Iowan Old Style", "Palatino Linotype", Palatino, serif;
+  font-size: 12px;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+}
+.matrix-cell{
+  font-size: 12px;
+  text-align:center;
+  color: var(--text);
+}
+.matrix-cell.empty{
+  color: var(--muted);
+}
+.matrix-cell.flag{
+  font-size: 13px;
+}
+.matrix-cell.flag.on{
+  color: var(--sun);
+}
+
+.review-picks{
+  display:flex;
+  flex-direction:column;
+  gap: 12px;
+}
+.pick-row{
+  display:flex;
+  flex-direction:column;
+  gap: 6px;
+}
+.pick-label{
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  color: var(--muted);
+}
+.pick-items{
+  display:flex;
+  flex-wrap:wrap;
+  gap: 8px;
+}
+
 /* --- Forms / Settings --- */
 .grid2{
   display:grid;

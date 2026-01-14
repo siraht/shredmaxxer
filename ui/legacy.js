@@ -3,6 +3,9 @@
 import { effectiveSegmentFlags, normalizeTri } from "../domain/heuristics.js";
 import { computeSegmentWindows } from "../domain/time.js";
 import { searchRosterItems } from "../domain/search.js";
+import { computeCoverageMatrix } from "../domain/coverage.js";
+import { computeRotationPicks } from "../domain/rotation.js";
+import { getWeekDateKeys } from "../domain/weekly.js";
 
 export function createLegacyUI(ctx){
   const { els, helpers, actions, defaults } = ctx;
@@ -81,6 +84,7 @@ export function createLegacyUI(ctx){
     const map = {
       today: [els.tabToday, els.viewToday],
       history: [els.tabHistory, els.viewHistory],
+      review: [els.tabReview, els.viewReview],
       settings: [els.tabSettings, els.viewSettings]
     };
 
@@ -608,10 +612,12 @@ export function createLegacyUI(ctx){
       dot.setAttribute("aria-label", `${field} ${i}`);
       dot.addEventListener("click", () => {
         const dateKey = yyyyMmDd(getCurrentDate());
-        const day = getDay(dateKey);
-        const next = (day[field] === String(i)) ? "" : String(i);
-        day[field] = next;
-        setDay(dateKey, day);
+        captureUndo("Signal updated", () => {
+          const day = getDay(dateKey);
+          const next = (day[field] === String(i)) ? "" : String(i);
+          day[field] = next;
+          setDay(dateKey, day);
+        });
         renderScales(dateKey);
       });
       container.appendChild(dot);
@@ -712,6 +718,90 @@ export function createLegacyUI(ctx){
         renderToday();
       });
     });
+  }
+
+  function renderReview(){
+    if(!els.coverageMatrix) return;
+    const state = getState();
+    const weekStart = Number.isFinite(state.settings.weekStart) ? state.settings.weekStart : 0;
+    const anchor = getCurrentDate();
+    const dateKeys = getWeekDateKeys(anchor, weekStart);
+    const matrix = computeCoverageMatrix(state.logs, state.rosters, dateKeys);
+
+    if(els.reviewRange){
+      const start = dateKeys[0] || "—";
+      const end = dateKeys[dateKeys.length - 1] || "—";
+      els.reviewRange.textContent = `${start} → ${end}`;
+    }
+
+    const head = `
+      <div class="matrix-row matrix-head">
+        <div class="matrix-date">Day</div>
+        <div class="matrix-cell">P</div>
+        <div class="matrix-cell">C</div>
+        <div class="matrix-cell">F</div>
+        <div class="matrix-cell">μ</div>
+        <div class="matrix-cell">×</div>
+        <div class="matrix-cell">⚠</div>
+        <div class="matrix-cell">◎</div>
+      </div>
+    `;
+
+    const rows = matrix.map((row) => {
+      const cell = (value) => {
+        const empty = value === 0 || value === "—";
+        const content = (value === 0) ? "—" : value;
+        const cls = empty ? "matrix-cell empty" : "matrix-cell";
+        return `<div class="${cls}">${content}</div>`;
+      };
+      const flag = (on, glyph) => `<div class="matrix-cell flag ${on ? "on" : "empty"}">${on ? glyph : "—"}</div>`;
+      return `
+        <div class="matrix-row" data-date="${escapeHtml(row.dateKey)}">
+          <div class="matrix-date">${escapeHtml(row.dateKey)}</div>
+          ${cell(row.counts.proteins)}
+          ${cell(row.counts.carbs)}
+          ${cell(row.counts.fats)}
+          ${cell(row.counts.micros)}
+          ${flag(row.flags.collision, "×")}
+          ${flag(row.flags.seedOil, "⚠")}
+          ${flag(row.flags.highFat, "◎")}
+        </div>
+      `;
+    }).join("");
+
+    els.coverageMatrix.innerHTML = head + rows;
+    els.coverageMatrix.querySelectorAll(".matrix-row[data-date]").forEach((row) => {
+      row.addEventListener("click", () => {
+        const key = row.dataset.date;
+        if(!key) return;
+        setCurrentDate(new Date(key + "T12:00:00"));
+        setActiveTab("today");
+        renderToday();
+      });
+    });
+
+    if(els.rotationPicks){
+      const picks = computeRotationPicks({ rosters: state.rosters, logs: state.logs }, { limitPerCategory: 2, dateKeys });
+      const labelMap = {
+        proteins: "Proteins",
+        carbs: "Carbs",
+        fats: "Fats",
+        micros: "Accoutrements (μ)"
+      };
+      const rowsHtml = Object.keys(labelMap).map((cat) => {
+        const items = picks[cat] || [];
+        const chips = items.length
+          ? items.map((item) => `<span class="chip">${escapeHtml(item.label)}</span>`).join("")
+          : `<span class="tiny muted">No picks yet</span>`;
+        return `
+          <div class="pick-row">
+            <div class="pick-label">${labelMap[cat]}</div>
+            <div class="pick-items">${chips}</div>
+          </div>
+        `;
+      }).join("");
+      els.rotationPicks.innerHTML = rowsHtml;
+    }
   }
 
   function setImportStatus(message, isError){
@@ -819,7 +909,7 @@ export function createLegacyUI(ctx){
         const next = input.value.trim();
         if(!next) return;
         schedule(`${itemId}:${field}`, () => {
-          actions.updateRosterLabel(category, itemId, next);
+          captureUndo("Roster label updated", () => actions.updateRosterLabel(category, itemId, next));
         });
         return;
       }
@@ -827,7 +917,7 @@ export function createLegacyUI(ctx){
       if(field === "aliases"){
         const list = parseCommaList(input.value);
         schedule(`${itemId}:${field}`, () => {
-          actions.updateRosterAliases(category, itemId, list);
+          captureUndo("Roster aliases updated", () => actions.updateRosterAliases(category, itemId, list));
         });
         return;
       }
@@ -835,7 +925,7 @@ export function createLegacyUI(ctx){
       if(field === "tags"){
         const list = parseCommaList(input.value);
         schedule(`${itemId}:${field}`, () => {
-          actions.updateRosterTags(category, itemId, list);
+          captureUndo("Roster tags updated", () => actions.updateRosterTags(category, itemId, list));
         });
       }
     });
@@ -850,14 +940,14 @@ export function createLegacyUI(ctx){
       const action = btn.dataset.action;
 
       if(action === "pin"){
-        actions.toggleRosterPinned(category, itemId);
+        captureUndo("Roster pin toggled", () => actions.toggleRosterPinned(category, itemId));
         renderSettings();
         renderToday();
         return;
       }
 
       if(action === "archive"){
-        actions.toggleRosterArchived(category, itemId);
+        captureUndo("Roster archive toggled", () => actions.toggleRosterArchived(category, itemId));
         renderSettings();
         renderToday();
         return;
@@ -865,7 +955,7 @@ export function createLegacyUI(ctx){
 
       if(action === "remove"){
         if(confirm("Remove this item? This removes it from all logs.")){
-          actions.removeRosterItem(category, itemId);
+          captureUndo("Roster item removed", () => actions.removeRosterItem(category, itemId));
           renderSettings();
           renderToday();
         }
@@ -900,6 +990,7 @@ export function createLegacyUI(ctx){
   function renderAll(){
     renderToday();
     renderHistory();
+    renderReview();
     renderSettings();
   }
 
@@ -907,6 +998,7 @@ export function createLegacyUI(ctx){
     // tabs
     els.tabToday.addEventListener("click", () => { setActiveTab("today"); renderToday(); });
     els.tabHistory.addEventListener("click", () => { setActiveTab("history"); renderHistory(); });
+    els.tabReview.addEventListener("click", () => { setActiveTab("review"); renderReview(); });
     els.tabSettings.addEventListener("click", () => { setActiveTab("settings"); renderSettings(); });
 
     // date nav
@@ -928,17 +1020,17 @@ export function createLegacyUI(ctx){
     // rituals
     els.movedBeforeLunch.addEventListener("click", () => {
       const dateKey = yyyyMmDd(getCurrentDate());
-      actions.toggleBoolField(dateKey, "movedBeforeLunch");
+      captureUndo("Move pre-lunch", () => actions.toggleBoolField(dateKey, "movedBeforeLunch"));
       renderRituals(dateKey);
     });
     els.trained.addEventListener("click", () => {
       const dateKey = yyyyMmDd(getCurrentDate());
-      actions.toggleBoolField(dateKey, "trained");
+      captureUndo("Training", () => actions.toggleBoolField(dateKey, "trained"));
       renderRituals(dateKey);
     });
     els.highFatDay.addEventListener("click", () => {
       const dateKey = yyyyMmDd(getCurrentDate());
-      actions.toggleBoolField(dateKey, "highFatDay");
+      captureUndo("High-fat day", () => actions.toggleBoolField(dateKey, "highFatDay"));
       renderRituals(dateKey);
     });
 
@@ -947,7 +1039,7 @@ export function createLegacyUI(ctx){
       const dateKey = yyyyMmDd(getCurrentDate());
       clearTimeout(notesDebounce);
       notesDebounce = setTimeout(() => {
-        actions.setDayField(dateKey, "notes", els.notes.value || "");
+        captureUndo("Notes updated", () => actions.setDayField(dateKey, "notes", els.notes.value || ""));
       }, 320);
     });
 
@@ -1047,7 +1139,7 @@ export function createLegacyUI(ctx){
         focusMode: els.setFocusMode.value || "nowfade"
       };
 
-      actions.updateSettings(s);
+      captureUndo("Settings saved", () => actions.updateSettings(s));
       renderAll();
       alert("Saved.");
     });
@@ -1061,7 +1153,7 @@ export function createLegacyUI(ctx){
     els.resetToday.addEventListener("click", () => {
       const k = getActiveDateKey();
       if(confirm("Reset today's logs?")){
-        actions.resetDay(k);
+        captureUndo("Day reset", () => actions.resetDay(k));
         setCurrentDate(dateFromKey(k));
         renderAll();
       }
@@ -1073,7 +1165,7 @@ export function createLegacyUI(ctx){
         const cat = btn.dataset.roster;
         const name = prompt(`Add to ${cat}:`);
         if(!name) return;
-        actions.addRosterItem(cat, name);
+        captureUndo("Roster item added", () => actions.addRosterItem(cat, name));
         renderSettings();
         renderToday();
       });
@@ -1094,7 +1186,7 @@ export function createLegacyUI(ctx){
       const currentSegmentId = getCurrentSegmentId();
       if(!currentSegmentId) return;
       const dateKey = yyyyMmDd(getCurrentDate());
-      actions.clearSegment(dateKey, currentSegmentId);
+      captureUndo("Segment cleared", () => actions.clearSegment(dateKey, currentSegmentId));
       openSegment(dateKey, currentSegmentId); // refresh UI
       updateSegmentVisual(dateKey, currentSegmentId);
     });
@@ -1111,10 +1203,12 @@ export function createLegacyUI(ctx){
         if(btn.dataset.add === "1"){
           const label = btn.dataset.label;
           if(!label) return;
-          const entry = actions.addRosterItem(category, label);
-          if(entry && entry.id){
-            actions.toggleSegmentItem(dateKey, currentSegmentId, category, entry.id);
-          }
+          captureUndo("Item added", () => {
+            const entry = actions.addRosterItem(category, label);
+            if(entry && entry.id){
+              actions.toggleSegmentItem(dateKey, currentSegmentId, category, entry.id);
+            }
+          });
           rosterSearch[category] = "";
           const input = searchInputs[category];
           if(input) input.value = "";
@@ -1125,7 +1219,7 @@ export function createLegacyUI(ctx){
 
         const item = btn.dataset.item;
         if(!item) return;
-        actions.toggleSegmentItem(dateKey, currentSegmentId, category, item);
+        captureUndo("Segment updated", () => actions.toggleSegmentItem(dateKey, currentSegmentId, category, item));
         // quick UI update
         btn.classList.toggle("active");
         refreshSegmentStatus(dateKey, currentSegmentId);
@@ -1176,7 +1270,7 @@ export function createLegacyUI(ctx){
       const name = prompt(`Add ${category} item:`);
       if(!name) return;
 
-      actions.addRosterItem(category, name);
+      captureUndo("Item added", () => actions.addRosterItem(category, name));
 
       // refresh sheet chips
       const dateKey = yyyyMmDd(getCurrentDate());
@@ -1200,9 +1294,10 @@ export function createLegacyUI(ctx){
       const dateKey = yyyyMmDd(getCurrentDate());
       const val = btn.dataset.value;
       setSegmentedActive(els.segCollision, val);
-      actions.setSegmentField(dateKey, currentSegmentId, "collision", val);
+      captureUndo("Collision updated", () => actions.setSegmentField(dateKey, currentSegmentId, "collision", val));
       refreshSegmentStatus(dateKey, currentSegmentId);
       updateSegmentVisual(dateKey, currentSegmentId);
+      updateSheetHints(dateKey, currentSegmentId);
     });
 
     // sheet high-fat meal (tri-state)
@@ -1213,7 +1308,7 @@ export function createLegacyUI(ctx){
       const dateKey = yyyyMmDd(getCurrentDate());
       const val = btn.dataset.value;
       setSegmentedActive(els.segHighFat, val);
-      actions.setSegmentField(dateKey, currentSegmentId, "highFatMeal", val);
+      captureUndo("High-fat updated", () => actions.setSegmentField(dateKey, currentSegmentId, "highFatMeal", val));
       refreshSegmentStatus(dateKey, currentSegmentId);
       updateSegmentVisual(dateKey, currentSegmentId);
     });
@@ -1226,9 +1321,10 @@ export function createLegacyUI(ctx){
       const dateKey = yyyyMmDd(getCurrentDate());
       const val = btn.dataset.value;
       setSegmentedActive(els.segSeedOil, val);
-      actions.setSegmentField(dateKey, currentSegmentId, "seedOil", val);
+      captureUndo("Seed oil updated", () => actions.setSegmentField(dateKey, currentSegmentId, "seedOil", val));
       refreshSegmentStatus(dateKey, currentSegmentId);
       updateSegmentVisual(dateKey, currentSegmentId);
+      updateSheetHints(dateKey, currentSegmentId);
     });
 
     // sheet status segmented
@@ -1239,7 +1335,7 @@ export function createLegacyUI(ctx){
       const dateKey = yyyyMmDd(getCurrentDate());
       const val = btn.dataset.value;
       setSegmentedActive(els.segStatus, val);
-      actions.setSegmentStatus(dateKey, currentSegmentId, val);
+      captureUndo("Status updated", () => actions.setSegmentStatus(dateKey, currentSegmentId, val));
       openSegment(dateKey, currentSegmentId);
       updateSegmentVisual(dateKey, currentSegmentId);
     });
@@ -1250,7 +1346,7 @@ export function createLegacyUI(ctx){
       if(!btn) return;
       const dateKey = yyyyMmDd(getCurrentDate());
       setSegmentedActive(els.ftnModeSeg, btn.dataset.value);
-      actions.setSegmentField(dateKey, "ftn", "ftnMode", btn.dataset.value);
+      captureUndo("FTN mode updated", () => actions.setSegmentField(dateKey, "ftn", "ftnMode", btn.dataset.value));
       refreshSegmentStatus(dateKey, "ftn");
       updateSegmentVisual(dateKey, "ftn");
     });
@@ -1262,11 +1358,21 @@ export function createLegacyUI(ctx){
       const dateKey = yyyyMmDd(getCurrentDate());
       clearTimeout(segNotesTimer);
       segNotesTimer = setTimeout(() => {
-        actions.setSegmentField(dateKey, currentSegmentId, "notes", els.segNotes.value || "");
+        captureUndo("Segment notes updated", () => actions.setSegmentField(dateKey, currentSegmentId, "notes", els.segNotes.value || ""));
         refreshSegmentStatus(dateKey, currentSegmentId);
         updateSegmentVisual(dateKey, currentSegmentId);
       }, 320);
     });
+
+    if(els.undoAction){
+      els.undoAction.addEventListener("click", () => {
+        if(!undoState) return;
+        actions.replaceState(undoState);
+        undoState = null;
+        hideUndoToast();
+        renderAll();
+      });
+    }
   }
 
   function startTicks(){

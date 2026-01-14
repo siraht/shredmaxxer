@@ -18,13 +18,13 @@ const logs = {
   "2026-01-12": {
     segments: {
       ftn: { status: "logged", ftnMode: "strict", proteins: ["p1"], carbs: [], fats: [], micros: [] },
-      lunch: { status: "none", proteins: ["p2"], carbs: ["c1"], fats: [], micros: ["m1"] }
+      lunch: { status: "none", proteins: ["p2"], carbs: ["c1"], fats: [], micros: ["m1"], seedOil: "yes" }
     }
   },
   "2026-01-13": {
     segments: {
       ftn: { status: "logged", ftnMode: "lite", proteins: ["p1"], carbs: ["c2"], fats: ["f1"], micros: [] },
-      dinner: { status: "unlogged", proteins: [], carbs: [], fats: ["f2"], micros: ["m2"] }
+      dinner: { status: "unlogged", proteins: [], carbs: [], fats: ["f2"], micros: ["m2"], collision: "yes" }
     }
   }
 };

@@ -5,9 +5,11 @@ export function getElements(){
     // tabs/views
     tabToday: document.getElementById("tabToday"),
     tabHistory: document.getElementById("tabHistory"),
+    tabReview: document.getElementById("tabReview"),
     tabSettings: document.getElementById("tabSettings"),
     viewToday: document.getElementById("viewToday"),
     viewHistory: document.getElementById("viewHistory"),
+    viewReview: document.getElementById("viewReview"),
     viewSettings: document.getElementById("viewSettings"),
 
     // today head
@@ -52,6 +54,9 @@ export function getElements(){
     importMode: document.getElementById("importMode"),
     importApply: document.getElementById("importApply"),
     importStatus: document.getElementById("importStatus"),
+    reviewRange: document.getElementById("reviewRange"),
+    coverageMatrix: document.getElementById("coverageMatrix"),
+    rotationPicks: document.getElementById("rotationPicks"),
 
     undoToast: document.getElementById("undoToast"),
     undoLabel: document.getElementById("undoLabel"),
