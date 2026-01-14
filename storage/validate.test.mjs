@@ -30,7 +30,7 @@ const baseDay = {
   },
   movedBeforeLunch: false,
   trained: false,
-  highFatDay: false,
+  highFatDay: "auto",
   energy: "",
   mood: "",
   cravings: "",
@@ -89,6 +89,65 @@ const validPayload = {
 
 const okResult = validateImportPayload(validPayload);
 assert(okResult.ok, "valid payload should pass");
+
+const triPayload = {
+  ...validPayload,
+  logs: {
+    "2026-01-15": { ...baseDay, highFatDay: "auto" }
+  }
+};
+const triResult = validateImportPayload(triPayload);
+assert(triResult.ok, "tri highFatDay should pass");
+
+const syncPayload = {
+  ...validPayload,
+  meta: {
+    ...validPayload.meta,
+    sync: { status: "idle" }
+  },
+  settings: {
+    ...validPayload.settings,
+    weekStart: 1,
+    privacy: {
+      ...validPayload.settings.privacy,
+      blurOnBackground: true
+    },
+    sync: {
+      mode: "hosted",
+      endpoint: "/api/sync/v1",
+      spaceId: "space-1",
+      encryption: "none",
+      pushDebounceMs: 2500,
+      pullOnBoot: true
+    }
+  }
+};
+const syncResult = validateImportPayload(syncPayload);
+assert(syncResult.ok, "sync settings payload should pass");
+
+const badWeekStart = {
+  ...syncPayload,
+  settings: { ...syncPayload.settings, weekStart: 9 }
+};
+assert(!validateImportPayload(badWeekStart).ok, "invalid weekStart should fail");
+
+const badSync = {
+  ...syncPayload,
+  settings: {
+    ...syncPayload.settings,
+    sync: { ...syncPayload.settings.sync, encryption: "bad", pullOnBoot: "yes" }
+  }
+};
+assert(!validateImportPayload(badSync).ok, "invalid sync settings should fail");
+
+const badPrivacy = {
+  ...syncPayload,
+  settings: {
+    ...syncPayload.settings,
+    privacy: { ...syncPayload.settings.privacy, blurOnBackground: "yes" }
+  }
+};
+assert(!validateImportPayload(badPrivacy).ok, "invalid blurOnBackground should fail");
 
 const legacyResult = validateImportPayload({ version: 3 });
 assert(!legacyResult.ok && legacyResult.legacy, "legacy payload should fail with legacy flag");

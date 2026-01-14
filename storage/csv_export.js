@@ -1,6 +1,6 @@
 // @ts-check
 
-import { effectiveSegmentFlags } from "../domain/heuristics.js";
+import { effectiveHighFatDay, effectiveSegmentFlags } from "../domain/heuristics.js";
 
 const SEGMENT_IDS = ["ftn", "lunch", "dinner", "late"];
 
@@ -124,7 +124,7 @@ export function buildCsvExport(state){
       day.cravings || "",
       boolToInt(day.movedBeforeLunch),
       boolToInt(day.trained),
-      boolToInt(day.highFatDay),
+      effectiveHighFatDay(day, rosters).value ? "1" : "0",
       String(issues.collision),
       String(issues.seedOil),
       String(issues.highFatMeal),

@@ -21,6 +21,17 @@ export const DEFAULT_SETTINGS = {
   supplementsMode: "none",
   lastKnownLat: undefined,
   lastKnownLon: undefined,
+  sync: {
+    mode: "hosted",
+    endpoint: "/api/sync/v1",
+    encryption: "none",
+    pushDebounceMs: 1200,
+    pullOnBoot: true
+  },
+  ui: {
+    accent: "",
+    reduceEffects: false
+  },
   privacy: {
     appLock: false,
     redactHome: false,
@@ -68,7 +79,9 @@ function mergeSettings(settings){
     const merged = {
       ...base,
       ...settings,
-      privacy: { ...base.privacy, ...(settings.privacy || {}) }
+      privacy: { ...base.privacy, ...(settings.privacy || {}) },
+      sync: { ...base.sync, ...(settings.sync || {}) },
+      ui: { ...base.ui, ...(settings.ui || {}) }
     };
     if(merged.privacy && Object.prototype.hasOwnProperty.call(merged.privacy, "appLockHash")){
       delete merged.privacy.appLockHash;
@@ -199,7 +212,7 @@ export function migrateV3ToV4(v3State, options = {}){
       supplements: { mode: "none", items: [], notes: "", tsLast: "" },
       movedBeforeLunch: !!day?.movedBeforeLunch,
       trained: !!day?.trained,
-      highFatDay: !!day?.highFatDay,
+      highFatDay: normalizeTri(day?.highFatDay),
       energy: safeString(day?.energy, ""),
       mood: safeString(day?.mood, ""),
       cravings: safeString(day?.cravings, ""),

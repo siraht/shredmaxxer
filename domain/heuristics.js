@@ -59,6 +59,28 @@ export function effectiveSegmentFlags(segment, rosters){
   };
 }
 
+/**
+ * Compute effective high-fat day state (tri override + auto).
+ * Auto uses any segment with effective highFatMeal = true.
+ * @param {any} day
+ * @param {Rosters} rosters
+ * @returns {{ value: boolean, source: "auto"|"yes"|"no" }}
+ */
+export function effectiveHighFatDay(day, rosters){
+  const override = normalizeTri(day?.highFatDay);
+  if(override === "yes") return { value: true, source: "yes" };
+  if(override === "no") return { value: false, source: "no" };
+  const segments = day?.segments || {};
+  for(const seg of Object.values(segments)){
+    if(!seg || typeof seg !== "object") continue;
+    const flags = effectiveSegmentFlags(seg, rosters);
+    if(flags.highFatMeal.value){
+      return { value: true, source: "auto" };
+    }
+  }
+  return { value: false, source: "auto" };
+}
+
 export { buildTagIndex, computeCollisionAuto, computeHighFatMealAuto };
 
 export {};

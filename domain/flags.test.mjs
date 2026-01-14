@@ -15,7 +15,8 @@ const rosters = {
   ],
   fats: [
     { id: "f1", tags: ["fat:dense"] },
-    { id: "f2", tags: ["fat:seed_oil"] }
+    { id: "f2", tags: ["fat:seed_oil"] },
+    { id: "f3", tags: ["fat:unknown"] }
   ]
 };
 
@@ -29,6 +30,9 @@ assert(computeSeedOilHint(seg, tagIndex) === false, "seed oil hint false without
 const seg2 = { carbs: ["c2"], fats: ["f2"] };
 assert(computeCollisionAuto(seg2, tagIndex) === false, "no collision for fruit + seed oil");
 assert(computeSeedOilHint(seg2, tagIndex) === true, "seed oil hint true for seed oil tag");
+
+const segUnknown = { carbs: ["c2"], fats: ["f3"] };
+assert(computeSeedOilHint(segUnknown, tagIndex) === true, "seed oil hint true for unknown oil tag");
 
 const seg3 = { carbs: ["c1"], fats: [] };
 assert(computeCollisionAuto(seg3, tagIndex) === false, "collision false without fat");

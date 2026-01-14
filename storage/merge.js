@@ -1,5 +1,7 @@
 // @ts-check
 
+import { compareHlc } from "../domain/hlc.js";
+
 /**
  * @typedef {Object} MergeOptions
  * @property {boolean} [unionItems]
@@ -30,11 +32,25 @@ function compareByRevAndTime(aRev, aTs, bRev, bTs){
  * @returns {number}
  */
 function compareRecords(a, b){
+  const aHlc = typeof a?.hlc === "string" ? a.hlc : "";
+  const bHlc = typeof b?.hlc === "string" ? b.hlc : "";
+  if(aHlc || bHlc){
+    if(aHlc && bHlc){
+      const hlcCmp = compareHlc(aHlc, bHlc);
+      if(hlcCmp !== 0) return hlcCmp;
+    }else{
+      return aHlc ? 1 : -1;
+    }
+  }
   const aRev = Number.isFinite(a?.rev) ? a.rev : 0;
   const bRev = Number.isFinite(b?.rev) ? b.rev : 0;
   const aTs = a?.tsLast || "";
   const bTs = b?.tsLast || "";
-  return compareByRevAndTime(aRev, aTs, bRev, bTs);
+  const revCmp = compareByRevAndTime(aRev, aTs, bRev, bTs);
+  if(revCmp !== 0) return revCmp;
+  const aActor = typeof a?.actor === "string" ? a.actor : "";
+  const bActor = typeof b?.actor === "string" ? b.actor : "";
+  return aActor.localeCompare(bActor);
 }
 
 function segmentHasContent(seg, segId){

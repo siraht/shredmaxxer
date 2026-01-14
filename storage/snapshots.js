@@ -5,6 +5,8 @@ import { storageAdapter } from "./adapter.js";
 const MAX_SNAPSHOTS = 7;
 const PRE_IMPORT_LABEL = "Pre-import";
 const PRE_MIGRATION_LABEL = "Pre-migration";
+const PRE_SYNC_LABEL = "Pre-sync";
+const SYNC_CONFLICT_LABEL = "Sync conflict";
 
 function generateId(){
   if(typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"){
@@ -126,6 +128,34 @@ export async function savePreMigrationSnapshot(opts){
   });
 }
 
-export { MAX_SNAPSHOTS, PRE_IMPORT_LABEL, PRE_MIGRATION_LABEL };
+/**
+ * Save a labeled snapshot before sync.
+ * @param {{state:any, adapter?:any, max?:number}} opts
+ * @returns {Promise<{saved:any, removed:any[]}>}
+ */
+export async function savePreSyncSnapshot(opts){
+  return saveSnapshotWithRetention({
+    state: opts.state,
+    adapter: opts.adapter,
+    max: opts.max,
+    label: PRE_SYNC_LABEL
+  });
+}
+
+/**
+ * Save a labeled snapshot for sync conflicts.
+ * @param {{state:any, adapter?:any, max?:number}} opts
+ * @returns {Promise<{saved:any, removed:any[]}>}
+ */
+export async function saveSyncConflictSnapshot(opts){
+  return saveSnapshotWithRetention({
+    state: opts.state,
+    adapter: opts.adapter,
+    max: opts.max,
+    label: SYNC_CONFLICT_LABEL
+  });
+}
+
+export { MAX_SNAPSHOTS, PRE_IMPORT_LABEL, PRE_MIGRATION_LABEL, PRE_SYNC_LABEL, SYNC_CONFLICT_LABEL };
 
 export {};

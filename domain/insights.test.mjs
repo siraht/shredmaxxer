@@ -91,6 +91,22 @@ const unknownOilInsights = computeDayInsights({
 });
 assert(unknownOilInsights.some((insight) => insight.ruleId === "seed_oil_hint"), "unknown oil hint fires");
 
+const seedOilNoneDay = {
+  segments: {
+    ftn: { ...baseSegment },
+    lunch: { ...baseSegment, fats: ["f2"], seedOil: "none" },
+    dinner: { ...baseSegment },
+    late: { ...baseSegment }
+  }
+};
+const seedOilNoneInsights = computeDayInsights({
+  day: seedOilNoneDay,
+  dateKey: "2026-01-17",
+  rosters,
+  settings: { phase: "" }
+});
+assert(!seedOilNoneInsights.some((insight) => insight.ruleId === "seed_oil_hint"), "seed oil hint suppressed when set to none");
+
 const ftnOffDay = {
   segments: {
     ftn: { ...baseSegment, status: "logged", ftnMode: "off" },

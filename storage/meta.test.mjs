@@ -13,6 +13,8 @@ const existing = {
   appVersion: "0.1.0",
   storageMode: "idb",
   persistStatus: "granted",
+  sync: { mode: "hosted", status: "idle" },
+  integrity: { safeMode: false },
   lastSnapshotTs: "2026-01-01T00:00:00Z"
 };
 
@@ -27,6 +29,8 @@ assert(next.installId === "install-123", "meta preserves installId");
 assert(next.appVersion === "1.2.3", "meta uses appVersion param");
 assert(next.storageMode === "localStorage", "meta uses storageMode param");
 assert(next.persistStatus === "denied", "meta uses persistStatus param");
+assert(next.sync?.mode === "hosted", "meta preserves sync fields");
+assert(next.integrity?.safeMode === false, "meta preserves integrity fields");
 assert(next.lastSnapshotTs === "2026-01-01T00:00:00Z", "meta preserves lastSnapshotTs");
 
 const generated = buildMeta(null, {

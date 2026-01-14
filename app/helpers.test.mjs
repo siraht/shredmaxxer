@@ -15,12 +15,16 @@ function assert(condition, label){
 }
 
 const merged = mergeSettings(
-  { privacy: { appLock: true, appLockHash: "abc" } },
-  { privacy: { blurOnBackground: true } }
+  { privacy: { appLock: true, appLockHash: "abc" }, sync: { mode: "hosted", endpoint: "/api" }, ui: { accent: "orange" } },
+  { privacy: { blurOnBackground: true }, sync: { pullOnBoot: true }, ui: { reduceEffects: true } }
 );
 assert(merged.privacy.appLock === true, "mergeSettings preserves base privacy");
 assert(merged.privacy.blurOnBackground === true, "mergeSettings merges privacy");
 assert(!("appLockHash" in merged.privacy), "mergeSettings strips appLockHash");
+assert(merged.sync.mode === "hosted", "mergeSettings preserves base sync");
+assert(merged.sync.pullOnBoot === true, "mergeSettings merges sync");
+assert(merged.ui.accent === "orange", "mergeSettings preserves base ui");
+assert(merged.ui.reduceEffects === true, "mergeSettings merges ui");
 
 const day = createDefaultDay();
 assert(day.segments.ftn.status === "unlogged", "default day sets segment status");

@@ -5,6 +5,9 @@
  * @typedef {string} DateKey
  */
 
+/** @typedef {string} ActorId */
+/** @typedef {string} Hlc */
+
 /** @typedef {"ftn"|"lunch"|"dinner"|"late"} SegmentId */
 
 /** @typedef {""|"none"|"yes"} SeedOil */
@@ -28,6 +31,7 @@
  * @property {string} label
  * @property {string[]} aliases
  * @property {ItemTag[]} tags
+ * @property {string} [icon]
  * @property {boolean} pinned
  * @property {boolean} archived
  * @property {string} tsCreated  ISO timestamp
@@ -48,6 +52,8 @@
  * @property {string} notes
  * @property {string} [tsFirst]
  * @property {string} [tsLast]
+ * @property {Hlc} [hlc]
+ * @property {ActorId} [actor]
  * @property {number} rev
  */
 
@@ -64,7 +70,7 @@
  * @property {Record<SegmentId, SegmentLog>} segments
  * @property {boolean} movedBeforeLunch
  * @property {boolean} trained
- * @property {boolean} highFatDay
+ * @property {Tri} highFatDay
  * @property {SupplementsLog} [supplements]
  * @property {Signal} energy
  * @property {Signal} mood
@@ -72,6 +78,8 @@
  * @property {string} notes
  * @property {string} tsCreated
  * @property {string} tsLast
+ * @property {Hlc} [hlc]
+ * @property {ActorId} [actor]
  * @property {number} rev
  */
 
@@ -93,11 +101,23 @@
  * @property {boolean} nudgesEnabled
  * @property {""|"none"|"essential"|"advanced"} supplementsMode
  * @property {{
+ *   mode: ""|"hosted"|"off",
+  *   endpoint: string,
+  *   spaceId?: string,
+ *   encryption: ""|"none"|"e2ee",
+  *   pushDebounceMs: number,
+  *   pullOnBoot: boolean
+  * }} [sync]
+ * @property {{
  *   appLock: boolean,
  *   redactHome: boolean,
  *   exportEncryptedByDefault: boolean,
  *   blurOnBackground: boolean
  * }} privacy
+ * @property {{
+ *   accent?: ""|"orange"|"cyan",
+ *   reduceEffects?: boolean
+ * }} [ui]
  */
 
 /**
@@ -124,6 +144,34 @@
  * @property {string} [appVersion]
  * @property {"idb"|"localStorage"} storageMode
  * @property {""|"unknown"|"granted"|"denied"} persistStatus
+ * @property {{
+ *   mode: ""|"hosted"|"off",
+ *   status: ""|"idle"|"syncing"|"offline"|"error",
+  *   lastSyncTs?: string,
+  *   lastError?: string,
+ *   lastPullHlc?: Hlc,
+ *   lastPushHlc?: Hlc,
+ *   pendingOutbox?: number,
+ *   conflicts?: number,
+ *   lastConflictTs?: string
+ * }} [sync]
+ * @property {{
+ *   safeMode?: boolean,
+ *   lastIntegrityCheckTs?: string,
+ *   dstClamp?: {
+ *     dateKey?: string,
+ *     applied?: boolean,
+ *     ambiguous?: boolean,
+ *     fields?: Array<{
+ *       field: string,
+ *       minutes: number,
+ *       resolvedMinutes: number,
+ *       reason: ""|"gap"|"ambiguous",
+ *       offsetMinutes: number
+ *     }>,
+ *     ts?: string
+ *   }
+ * }} [integrity]
  * @property {string} [lastSnapshotTs]
  */
 

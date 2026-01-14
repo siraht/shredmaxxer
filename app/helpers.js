@@ -13,6 +13,12 @@ export function mergeSettings(base, next){
   if(base?.privacy || next?.privacy){
     merged.privacy = { ...(base?.privacy || {}), ...(next?.privacy || {}) };
   }
+  if(base?.sync || next?.sync){
+    merged.sync = { ...(base?.sync || {}), ...(next?.sync || {}) };
+  }
+  if(base?.ui || next?.ui){
+    merged.ui = { ...(base?.ui || {}), ...(next?.ui || {}) };
+  }
   if(merged.privacy && Object.prototype.hasOwnProperty.call(merged.privacy, "appLockHash")){
     delete merged.privacy.appLockHash;
   }
@@ -34,7 +40,7 @@ export function createDefaultDay(){
     supplements: { mode: "none", items: [], notes: "", tsLast: "" },
     movedBeforeLunch: false,
     trained: false,
-    highFatDay: false,
+    highFatDay: "auto",
     energy: "",
     mood: "",
     cravings: "",

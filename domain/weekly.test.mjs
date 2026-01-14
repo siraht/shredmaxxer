@@ -20,16 +20,17 @@ function assert(condition, label){
 
 const logs = {
   "2026-01-12": {
-    highFatDay: true,
+    highFatDay: "yes",
     segments: {
       ftn: { status: "logged", ftnMode: "strict", proteins: ["p1"], carbs: [], fats: [], micros: [] },
       lunch: { status: "none", proteins: ["p2"], carbs: ["c1"], fats: ["f1"], micros: ["m1"], seedOil: "yes", collision: "auto", highFatMeal: "auto" }
     }
   },
   "2026-01-13": {
+    highFatDay: "auto",
     segments: {
       ftn: { status: "logged", ftnMode: "lite", proteins: ["p1"], carbs: ["c2"], fats: ["f1"], micros: [] },
-      dinner: { status: "unlogged", proteins: [], carbs: [], fats: ["f2"], micros: ["m2"], collision: "yes" }
+      dinner: { status: "unlogged", proteins: [], carbs: [], fats: ["f1"], micros: ["m2"], collision: "yes" }
     }
   }
 };
@@ -38,7 +39,7 @@ const dateKeys = ["2026-01-12", "2026-01-13", "2026-01-14"];
 const counts = computeWeeklyUniqueCounts(logs, dateKeys);
 assert(counts.proteins === 2, "unique proteins count");
 assert(counts.carbs === 2, "unique carbs count");
-assert(counts.fats === 2, "unique fats count");
+assert(counts.fats === 1, "unique fats count");
 assert(counts.micros === 2, "unique micros count");
 assert(counts.sets.proteins.has("p1"), "unique sets include p1");
 assert(counts.sets.carbs.has("c1"), "unique sets include c1");
@@ -74,7 +75,7 @@ const issues = computeIssueFrequency(logs, dateKeys, rosters);
 assert(issues.collisionDays === 2, "collision days count");
 assert(issues.seedOilDays === 1, "seed oil days count");
 assert(issues.highFatMealDays === 2, "high-fat meal days count");
-assert(issues.highFatDayDays === 1, "high-fat day toggle count");
+assert(issues.highFatDayDays === 2, "high-fat day toggle count");
 
 const summary = computeWeeklySummary({
   logs,

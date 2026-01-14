@@ -20,7 +20,7 @@ const state = {
     "2026-01-12": {
       movedBeforeLunch: true,
       trained: false,
-      highFatDay: true,
+      highFatDay: "yes",
       energy: "3",
       mood: "2",
       cravings: "1",

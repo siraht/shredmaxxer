@@ -1,6 +1,7 @@
 // @ts-check
 
 import { buildTagIndex, computeSegmentFlags } from "../domain/flags.js";
+import { effectiveHighFatDay } from "../domain/heuristics.js";
 
 const SEGMENTS = ["ftn", "lunch", "dinner", "late"];
 const CATEGORIES = ["proteins", "carbs", "fats", "micros"];
@@ -99,7 +100,7 @@ export function buildCsvRows(state, options = {}){
       state?.settings?.phase || "",
       day.movedBeforeLunch ? "1" : "0",
       day.trained ? "1" : "0",
-      day.highFatDay ? "1" : "0",
+      effectiveHighFatDay(day, state?.rosters || {}).value ? "1" : "0",
       day.energy || "",
       day.mood || "",
       day.cravings || "",

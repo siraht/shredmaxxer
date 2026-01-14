@@ -2,6 +2,7 @@
 
 import { computeCoverageMatrix } from "./coverage.js";
 import { computeReviewCorrelations } from "./correlations.js";
+import { effectiveHighFatDay } from "./heuristics.js";
 import { addDaysLocal, dateToKey } from "./time.js";
 
 /**
@@ -160,7 +161,7 @@ export function computeIssueFrequency(logs, dateKeys, rosters){
     if(row.flags.collision) collisionDays += 1;
     if(row.flags.seedOil) seedOilDays += 1;
     if(row.flags.highFat) highFatMealDays += 1;
-    if(logs?.[row.dateKey]?.highFatDay) highFatDayDays += 1;
+    if(effectiveHighFatDay(logs?.[row.dateKey], rosters).value) highFatDayDays += 1;
   }
 
   return { collisionDays, seedOilDays, highFatMealDays, highFatDayDays };

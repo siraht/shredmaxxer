@@ -22,6 +22,8 @@ export function buildMeta(existing, params){
     appVersion: params.appVersion || base.appVersion || "",
     storageMode: params.storageMode,
     persistStatus: params.persistStatus,
+    sync: base.sync,
+    integrity: base.integrity,
     lastSnapshotTs: base.lastSnapshotTs
   };
 }
@@ -39,6 +41,8 @@ export function isMetaEqual(a, b){
     a.appVersion === b.appVersion &&
     a.storageMode === b.storageMode &&
     a.persistStatus === b.persistStatus &&
+    a.sync === b.sync &&
+    a.integrity === b.integrity &&
     a.lastSnapshotTs === b.lastSnapshotTs
   );
 }

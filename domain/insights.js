@@ -259,7 +259,7 @@ export function computeDayInsights(params){
     if(!seg) continue;
     const seedOilTagged = hasTag(seg?.fats, "fat:seed_oil", tagIndex)
       || hasTag(seg?.fats, "fat:unknown", tagIndex);
-    if(seedOilTagged && seg?.seedOil !== "yes"){
+    if(seedOilTagged && seg?.seedOil !== "yes" && seg?.seedOil !== "none"){
       const items = (seg?.fats || []).map((id) => labelMap.get(id) || id).slice(0, 2);
       const label = items.length ? ` (${items.join(", ")})` : "";
       const ruleId = "seed_oil_hint";

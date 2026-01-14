@@ -52,6 +52,14 @@ function isStringArray(value){
 }
 
 /**
+ * @param {unknown} value
+ * @returns {value is ""|"auto"|"yes"|"no"}
+ */
+function isTriString(value){
+  return typeof value === "string" && ["", "auto", "yes", "no"].includes(value);
+}
+
+/**
  * @param {string[]} errors
  * @param {string} message
  */
@@ -136,6 +144,44 @@ function validateSettings(settings, errors, path){
     }
   }
 
+  if(settings.sync !== undefined){
+    if(!isPlainObject(settings.sync)){
+      pushError(errors, `${path}.sync must be an object if present.`);
+    }else{
+      if(settings.sync.mode !== undefined && (!isString(settings.sync.mode) || !["", "hosted", "off"].includes(settings.sync.mode))){
+        pushError(errors, `${path}.sync.mode must be \"\", \"hosted\", or \"off\" if present.`);
+      }
+      if(settings.sync.endpoint !== undefined && !isString(settings.sync.endpoint)){
+        pushError(errors, `${path}.sync.endpoint must be a string if present.`);
+      }
+      if(settings.sync.spaceId !== undefined && !isString(settings.sync.spaceId)){
+        pushError(errors, `${path}.sync.spaceId must be a string if present.`);
+      }
+      if(settings.sync.encryption !== undefined && (!isString(settings.sync.encryption) || !["", "none", "e2ee"].includes(settings.sync.encryption))){
+        pushError(errors, `${path}.sync.encryption must be \"\", \"none\", or \"e2ee\" if present.`);
+      }
+      if(settings.sync.pushDebounceMs !== undefined && !isNumber(settings.sync.pushDebounceMs)){
+        pushError(errors, `${path}.sync.pushDebounceMs must be a number if present.`);
+      }
+      if(settings.sync.pullOnBoot !== undefined && !isBoolean(settings.sync.pullOnBoot)){
+        pushError(errors, `${path}.sync.pullOnBoot must be a boolean if present.`);
+      }
+    }
+  }
+
+  if(settings.ui !== undefined){
+    if(!isPlainObject(settings.ui)){
+      pushError(errors, `${path}.ui must be an object if present.`);
+    }else{
+      if(settings.ui.accent !== undefined && (!isString(settings.ui.accent) || !["", "orange", "cyan"].includes(settings.ui.accent))){
+        pushError(errors, `${path}.ui.accent must be \"\", \"orange\", or \"cyan\" if present.`);
+      }
+      if(settings.ui.reduceEffects !== undefined && !isBoolean(settings.ui.reduceEffects)){
+        pushError(errors, `${path}.ui.reduceEffects must be a boolean if present.`);
+      }
+    }
+  }
+
   if(settings.lastKnownLat !== undefined && !isNumber(settings.lastKnownLat)){
     pushError(errors, `${path}.lastKnownLat must be a number if present.`);
   }
@@ -166,6 +212,9 @@ function validateRosterItem(item, errors, path){
   }
   if(!isStringArray(item.tags)){
     pushError(errors, `${path}.tags must be an array of strings.`);
+  }
+  if(item.icon !== undefined && !isString(item.icon)){
+    pushError(errors, `${path}.icon must be a string if present.`);
   }
   if(!isBoolean(item.pinned)){
     pushError(errors, `${path}.pinned must be a boolean.`);
@@ -332,8 +381,14 @@ function validateDayLog(day, errors, path){
   if(!isBoolean(day.trained)){
     pushError(errors, `${path}.trained must be a boolean.`);
   }
-  if(!isBoolean(day.highFatDay)){
-    pushError(errors, `${path}.highFatDay must be a boolean.`);
+  if(isBoolean(day.highFatDay)){
+    // Legacy boolean form.
+  }else if(isString(day.highFatDay)){
+    if(day.highFatDay && !["auto", "yes", "no"].includes(day.highFatDay)){
+      pushError(errors, `${path}.highFatDay must be \"auto\", \"yes\", \"no\", or empty.`);
+    }
+  }else{
+    pushError(errors, `${path}.highFatDay must be a boolean or tri-state string.`);
   }
 
   if(!isString(day.energy)){

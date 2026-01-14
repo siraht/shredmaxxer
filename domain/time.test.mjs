@@ -9,6 +9,7 @@ import {
   computeSegmentWindows,
   computeSunTimes,
   dateToKey,
+  inspectDstClamp,
   liftBoundary,
   minutesToTime,
   parseTimeToMinutes
@@ -143,6 +144,17 @@ function run(){
   assert(noonClamp.reason === "", "noon clamp no reason");
   assertBetween(noonClamp.minutes, 0, 1439, "noon clamp minutes in range");
   assert(Number.isFinite(noonClamp.offsetMinutes), "noon clamp has offset");
+
+  const dstInfo = inspectDstClamp(new Date(2026, 0, 15), {
+    dayStart: "06:00",
+    dayEnd: "23:59",
+    ftnEnd: "12:00",
+    lunchEnd: "16:00",
+    dinnerEnd: "21:00"
+  });
+  assert(dstInfo.applied === false, "dst inspect: no clamp expected");
+  assert(dstInfo.ambiguous === false, "dst inspect: no ambiguity expected");
+  assert(dstInfo.fields.length === 0, "dst inspect: no fields flagged");
 
   // DST gap clamp test (runs only if timezone can be set to America/New_York)
   if(!process.env.TZ){

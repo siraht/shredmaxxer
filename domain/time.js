@@ -87,6 +87,40 @@ export function clampLocalTime(date, minutes){
 }
 
 /**
+ * Inspect protocol boundary times for DST clamping on a given date.
+ * @param {Date} date
+ * @param {{dayStart:string, dayEnd:string, ftnEnd:string, lunchEnd:string, dinnerEnd:string}} settings
+ * @returns {{
+ *  applied: boolean,
+ *  ambiguous: boolean,
+ *  fields: Array<{field:string, minutes:number, resolvedMinutes:number, reason:""|"gap"|"ambiguous", offsetMinutes:number}>
+ * }}
+ */
+export function inspectDstClamp(date, settings){
+  const d = (date instanceof Date) ? date : new Date();
+  const fields = ["dayStart", "dayEnd", "ftnEnd", "lunchEnd", "dinnerEnd"];
+  const results = [];
+  let applied = false;
+  let ambiguous = false;
+  for(const field of fields){
+    const minutes = parseTimeToMinutes(settings?.[field]);
+    const clamp = clampLocalTime(d, minutes);
+    if(clamp.clamped || clamp.reason){
+      results.push({
+        field,
+        minutes,
+        resolvedMinutes: clamp.minutes,
+        reason: clamp.reason,
+        offsetMinutes: clamp.offsetMinutes
+      });
+      if(clamp.clamped) applied = true;
+      if(clamp.reason === "ambiguous") ambiguous = true;
+    }
+  }
+  return { applied, ambiguous, fields: results };
+}
+
+/**
  * Lift a boundary into the protocol-day timeline so it is >= start.
  * @param {number} start
  * @param {number} boundary

@@ -26,7 +26,7 @@ const state = {
       },
       movedBeforeLunch: true,
       trained: false,
-      highFatDay: false,
+      highFatDay: "auto",
       energy: "3",
       mood: "4",
       cravings: "2",
@@ -41,7 +41,7 @@ const state = {
       },
       movedBeforeLunch: false,
       trained: false,
-      highFatDay: false,
+      highFatDay: "no",
       energy: "",
       mood: "",
       cravings: "",
@@ -56,6 +56,7 @@ assert(rows.length === 2, "rows include two days");
 assert(rows[0][0] === "2026-01-01", "rows sorted by DateKey asc");
 
 const dayTwo = rows[1];
+assert(dayTwo[4] === "1", "highFatDay auto derives from high-fat meals");
 const collisionCount = dayTwo[8];
 const seedOilCount = dayTwo[9];
 const highFatCount = dayTwo[10];
@@ -87,7 +88,7 @@ const edgeState = {
       },
       movedBeforeLunch: false,
       trained: false,
-      highFatDay: false,
+      highFatDay: "no",
       energy: "",
       mood: "",
       cravings: "",

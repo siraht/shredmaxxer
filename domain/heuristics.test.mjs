@@ -1,6 +1,6 @@
 // @ts-check
 
-import { effectiveSegmentFlags, normalizeTri } from "./heuristics.js";
+import { effectiveHighFatDay, effectiveSegmentFlags, normalizeTri } from "./heuristics.js";
 
 function assert(condition, label){
   if(!condition){
@@ -58,5 +58,23 @@ const emptyOverride = {
 const emptyFlags = effectiveSegmentFlags(emptyOverride, rosters);
 assert(emptyFlags.collision.source === "auto", "empty collision uses auto");
 assert(emptyFlags.highFatMeal.source === "auto", "empty high-fat uses auto");
+
+const dayAuto = {
+  highFatDay: "auto",
+  segments: {
+    ftn: { carbs: [], fats: [], collision: "auto", highFatMeal: "auto" },
+    lunch: { carbs: [], fats: ["f1"], collision: "auto", highFatMeal: "auto" },
+    dinner: { carbs: [], fats: [], collision: "auto", highFatMeal: "auto" },
+    late: { carbs: [], fats: [], collision: "auto", highFatMeal: "auto" }
+  }
+};
+const autoHighFat = effectiveHighFatDay(dayAuto, rosters);
+assert(autoHighFat.value === true, "auto highFatDay true when high-fat meal exists");
+assert(autoHighFat.source === "auto", "auto highFatDay source auto");
+
+const dayNo = { ...dayAuto, highFatDay: "no" };
+const noHighFat = effectiveHighFatDay(dayNo, rosters);
+assert(noHighFat.value === false, "override highFatDay no");
+assert(noHighFat.source === "no", "override highFatDay source no");
 
 console.log("heuristics tests: ok");

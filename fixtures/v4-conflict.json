@@ -159,7 +159,7 @@
       },
       "movedBeforeLunch": true,
       "trained": true,
-      "highFatDay": true,
+      "highFatDay": "yes",
       "energy": "5",
       "mood": "4",
       "cravings": "2",

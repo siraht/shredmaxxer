@@ -61,6 +61,7 @@ const day = migrated.logs["2026-01-10"];
 const seg = day.segments.ftn;
 assert(seg.collision === "yes", "boolean true collision -> yes");
 assert(seg.highFatMeal === "no", "boolean false highFatMeal -> no");
+assert(day.highFatDay === "yes", "boolean highFatDay -> yes");
 assert(seg.proteins[0] === beef.id, "labels mapped to IDs");
 assert(seg.carbs[0] === newCarb.id, "missing label mapped to new ID");
 

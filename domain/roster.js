@@ -118,6 +118,7 @@ export function dedupeRosterByLabel(items, onDuplicate){
  *   id?: string,
  *   aliases?: string[],
  *   tags?: string[],
+ *   icon?: string,
  *   pinned?: boolean,
  *   archived?: boolean,
  *   now?: Date
@@ -143,6 +144,7 @@ export function createRosterItem(label, options){
     label: normalized,
     aliases: Array.isArray(opts.aliases) ? [...opts.aliases] : [],
     tags: Array.isArray(opts.tags) ? [...opts.tags] : [],
+    icon: typeof opts.icon === "string" ? opts.icon : "",
     pinned: !!opts.pinned,
     archived: !!opts.archived,
     tsCreated: iso,

@@ -36,7 +36,7 @@ const legacy = {
       },
       movedBeforeLunch: true,
       trained: false,
-      highFatDay: false,
+      highFatDay: "no",
       energy: "3",
       mood: "4",
       cravings: "2",

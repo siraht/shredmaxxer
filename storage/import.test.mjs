@@ -30,7 +30,7 @@ const baseDay = {
   },
   movedBeforeLunch: false,
   trained: false,
-  highFatDay: false,
+  highFatDay: "no",
   energy: "",
   mood: "",
   cravings: "",
