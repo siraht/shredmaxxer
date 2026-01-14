@@ -3,9 +3,8 @@
 import { effectiveSegmentFlags, normalizeTri } from "../domain/heuristics.js";
 import { computeSegmentWindows } from "../domain/time.js";
 import { searchRosterItems } from "../domain/search.js";
-import { computeCoverageMatrix } from "../domain/coverage.js";
 import { computeRotationPicks } from "../domain/rotation.js";
-import { computeIssueFrequency, getWeekDateKeys } from "../domain/weekly.js";
+import { computeWeeklySummary } from "../domain/weekly.js";
 
 export function createLegacyUI(ctx){
   const { els, helpers, actions, defaults } = ctx;
@@ -35,6 +34,7 @@ export function createLegacyUI(ctx){
   let segNotesTimer = null;
   let pendingImport = null;
   let pendingImportName = "";
+  let diagSnapshotSeq = 0;
   let rosterSearch = {
     proteins: "",
     carbs: "",
@@ -201,6 +201,55 @@ export function createLegacyUI(ctx){
     };
   }
 
+  function segmentHasContent(seg, segId){
+    if(!seg) return false;
+    const hasItems = seg.proteins.length || seg.carbs.length || seg.fats.length || seg.micros.length;
+    const hasFlags = (seg.collision && seg.collision !== "auto") || (seg.highFatMeal && seg.highFatMeal !== "auto") || seg.seedOil || seg.notes;
+    const hasFtn = segId === "ftn" && seg.ftnMode;
+    return !!(hasItems || hasFlags || hasFtn);
+  }
+
+  function getSegmentTimestamp(seg, day){
+    const ts = seg?.tsLast || seg?.tsFirst || day?.tsLast || day?.tsCreated;
+    if(!ts) return null;
+    const parsed = Date.parse(ts);
+    if(!Number.isFinite(parsed)) return null;
+    return parsed;
+  }
+
+  function findLastLoggedSegment(){
+    const state = getState();
+    let best = null;
+    let bestTs = -Infinity;
+    for(const [dateKey, day] of Object.entries(state.logs || {})){
+      const segments = day?.segments || {};
+      for(const [segId, seg] of Object.entries(segments)){
+        if(!segmentHasContent(seg, segId)) continue;
+        const ts = getSegmentTimestamp(seg, day);
+        if(ts === null) continue;
+        if(ts > bestTs){
+          bestTs = ts;
+          best = { dateKey, segId, seg };
+        }
+      }
+    }
+    return best;
+  }
+
+  function repeatLastSegment(dateKey, segId){
+    const last = findLastLoggedSegment();
+    if(!last){
+      undoState = null;
+      showUndoToast("No recent segment to copy");
+      return;
+    }
+    captureUndo("Segment repeated", () => actions.copySegment(dateKey, segId, last.seg));
+    updateSegmentVisual(dateKey, segId);
+    if(getCurrentSegmentId() === segId && !els.sheet.classList.contains("hidden")){
+      openSegment(dateKey, segId);
+    }
+  }
+
   function renderTimeline(dateKey, day){
     const state = getState();
     const defs = getSegmentDefs(state.settings);
@@ -252,7 +301,36 @@ export function createLegacyUI(ctx){
       segEl.appendChild(flags);
       segEl.appendChild(bubbles);
 
-      segEl.addEventListener("click", () => openSegment(dateKey, d.id));
+      let longPressTimer = null;
+      let longPressFired = false;
+
+      const clearLongPress = () => {
+        if(longPressTimer) clearTimeout(longPressTimer);
+        longPressTimer = null;
+      };
+
+      segEl.addEventListener("pointerdown", (e) => {
+        if(e.button !== undefined && e.button !== 0) return;
+        longPressFired = false;
+        clearLongPress();
+        longPressTimer = setTimeout(() => {
+          longPressFired = true;
+          repeatLastSegment(dateKey, d.id);
+        }, 520);
+      });
+
+      segEl.addEventListener("pointerup", clearLongPress);
+      segEl.addEventListener("pointerleave", clearLongPress);
+      segEl.addEventListener("pointercancel", clearLongPress);
+
+      segEl.addEventListener("click", (e) => {
+        if(longPressFired){
+          e.preventDefault();
+          longPressFired = false;
+          return;
+        }
+        openSegment(dateKey, d.id);
+      });
       segEl.addEventListener("keydown", (e) => {
         if(e.key === "Enter" || e.key === " "){
           e.preventDefault();
@@ -696,6 +774,24 @@ export function createLegacyUI(ctx){
     setValue(els.diagPersistStatus, meta.persistStatus);
     setValue(els.diagAppVersion, meta.appVersion);
     setValue(els.diagInstallId, meta.installId);
+    if(els.diagSnapshotCount){
+      const requestId = ++diagSnapshotSeq;
+      setValue(els.diagSnapshotCount, "...");
+      if(typeof actions.listSnapshots === "function"){
+        actions.listSnapshots()
+          .then((list) => {
+            if(requestId !== diagSnapshotSeq) return;
+            const count = Array.isArray(list) ? list.length : 0;
+            setValue(els.diagSnapshotCount, String(count));
+          })
+          .catch(() => {
+            if(requestId !== diagSnapshotSeq) return;
+            setValue(els.diagSnapshotCount, "—");
+          });
+      }else{
+        setValue(els.diagSnapshotCount, "—");
+      }
+    }
   }
 
   function renderHistory(){
@@ -744,8 +840,15 @@ export function createLegacyUI(ctx){
       ? parsedWeekStart
       : 0;
     const anchor = getCurrentDate();
-    const dateKeys = getWeekDateKeys(anchor, weekStart);
-    const matrix = computeCoverageMatrix(state.logs, state.rosters, dateKeys);
+    const summary = computeWeeklySummary({
+      logs: state.logs,
+      rosters: state.rosters,
+      anchorDate: anchor,
+      weekStart,
+      phase: state.settings.phase || ""
+    });
+    const dateKeys = summary.dateKeys || [];
+    const matrix = summary.matrix || [];
 
     if(els.reviewRange){
       const start = dateKeys[0] || "—";
@@ -754,7 +857,7 @@ export function createLegacyUI(ctx){
     }
 
     if(els.reviewIssues){
-      const issues = computeIssueFrequency(state.logs || {}, dateKeys, state.rosters);
+      const issues = summary.issueFrequency || { collisionDays: 0, seedOilDays: 0, highFatMealDays: 0, highFatDayDays: 0 };
       const totalDays = dateKeys.length || 0;
       els.reviewIssues.innerHTML = `
         <div class="issue-chip">Collision days: ${issues.collisionDays}/${totalDays}</div>
@@ -762,6 +865,15 @@ export function createLegacyUI(ctx){
         <div class="issue-chip">High‑fat meals: ${issues.highFatMealDays}/${totalDays}</div>
         <div class="issue-chip">High‑fat day toggles: ${issues.highFatDayDays}/${totalDays}</div>
       `;
+    }
+
+    if(els.reviewSummary){
+      const counts = summary.uniqueCounts || { proteins: 0, carbs: 0, fats: 0, micros: 0 };
+      const ftn = summary.ftnSummary || { strict: 0, lite: 0, off: 0, unset: 0, loggedDays: 0, days: 0 };
+      els.reviewSummary.textContent = `Unique: P${counts.proteins} • C${counts.carbs} • F${counts.fats} • μ${counts.micros} • FTN strict ${ftn.strict}, lite ${ftn.lite}, off ${ftn.off}`;
+    }
+    if(els.reviewPhase){
+      els.reviewPhase.textContent = summary.phaseLabel || "";
     }
 
     const head = `

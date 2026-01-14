@@ -388,6 +388,15 @@ async function persistAll() {
   }
 }
 
+async function listSnapshots(){
+  try{
+    return await storageAdapter.listSnapshots();
+  }catch(e){
+    console.error("Failed to list snapshots:", e);
+    return [];
+  }
+}
+
 function getDay(dateKey){
   const existing = state.logs[dateKey];
   const base = createDefaultDay();
@@ -834,6 +843,7 @@ const ui = createLegacyUI({
     importState,
     validateImportPayload,
     applyImportPayload,
+    listSnapshots,
     replaceState,
     updateSettings,
     toggleFocusMode,
