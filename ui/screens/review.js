@@ -7,8 +7,8 @@ import { computeReviewCorrelations } from "../../domain/correlations.js";
 import { dateToKey } from "../../domain/time.js";
 import { isWeekIndexFresh } from "../../domain/indexes.js";
 
-export function renderReviewScreen({ els, state, anchorDate, escapeHtml, onMatrixSelect, onPerf }){
-  if(!els.coverageMatrix){
+export function renderReviewScreen({ els, state, anchorDate, escapeHtml, onMatrixSelect, onPerf }) {
+  if (!els.coverageMatrix) {
     return { insights: [] };
   }
   const perf = typeof onPerf === "function" ? onPerf : null;
@@ -24,7 +24,7 @@ export function renderReviewScreen({ els, state, anchorDate, escapeHtml, onMatri
   const tSummary = perf ? now() : 0;
   const weekKey = dateToKey(getWeekStartDate(anchor, weekStart));
   const cachedWeek = state.weekIndex?.[weekKey];
-  if(cachedWeek && cachedWeek.indexVersion === 1 && isWeekIndexFresh(cachedWeek, state.logs)){
+  if (cachedWeek && cachedWeek.indexVersion === 1 && isWeekIndexFresh(cachedWeek, state.logs)) {
     const dateKeys = Array.isArray(cachedWeek.dateKeys) ? cachedWeek.dateKeys : [];
     const cachedIssues = cachedWeek.issueFrequency;
     const useCachedIssues = cachedIssues && Number.isFinite(cachedIssues.collisionDays);
@@ -38,7 +38,7 @@ export function renderReviewScreen({ els, state, anchorDate, escapeHtml, onMatri
       correlations: cachedWeek.correlations || computeReviewCorrelations(state.logs, state.rosters, dateKeys),
       phaseLabel: cachedWeek.phaseLabel || getPhaseTargetLabel(state.settings.phase || "")
     };
-  }else{
+  } else {
     summary = computeWeeklySummary({
       logs: state.logs,
       rosters: state.rosters,
@@ -47,19 +47,19 @@ export function renderReviewScreen({ els, state, anchorDate, escapeHtml, onMatri
       phase: state.settings.phase || ""
     });
   }
-  if(perf){
+  if (perf) {
     perf("summary", now() - tSummary, { weekKey, days: summary?.dateKeys?.length || 0 });
   }
   const dateKeys = summary.dateKeys || [];
   const matrix = summary.matrix || [];
 
-  if(els.reviewRange){
+  if (els.reviewRange) {
     const start = dateKeys[0] || "—";
     const end = dateKeys[dateKeys.length - 1] || "—";
     els.reviewRange.textContent = `${start} → ${end}`;
   }
 
-  if(els.reviewIssues){
+  if (els.reviewIssues) {
     const issues = summary.issueFrequency || { collisionDays: 0, seedOilDays: 0, highFatMealDays: 0, highFatDayDays: 0 };
     const totalDays = dateKeys.length || 0;
     els.reviewIssues.innerHTML = `
@@ -70,16 +70,16 @@ export function renderReviewScreen({ els, state, anchorDate, escapeHtml, onMatri
     `;
   }
 
-  if(els.reviewSummary){
+  if (els.reviewSummary) {
     const counts = summary.uniqueCounts || { proteins: 0, carbs: 0, fats: 0, micros: 0 };
     const ftn = summary.ftnSummary || { strict: 0, lite: 0, off: 0, unset: 0, loggedDays: 0, days: 0 };
     els.reviewSummary.textContent = `Unique: P${counts.proteins} • C${counts.carbs} • F${counts.fats} • μ${counts.micros} • FTN strict ${ftn.strict}, lite ${ftn.lite}, off ${ftn.off}`;
   }
-  if(els.reviewPhase){
+  if (els.reviewPhase) {
     els.reviewPhase.textContent = summary.phaseLabel || "";
   }
 
-  if(els.reviewCorrelations){
+  if (els.reviewCorrelations) {
     const tCorr = perf ? now() : 0;
     const correlations = Array.isArray(summary.correlations) ? summary.correlations : [];
     const fmtAvg = (value) => (value == null ? "—" : value.toFixed(2));
@@ -93,20 +93,20 @@ export function renderReviewScreen({ els, state, anchorDate, escapeHtml, onMatri
       `;
     }).join("");
     els.reviewCorrelations.innerHTML = rows || `<div class="tiny muted">No correlations yet.</div>`;
-    if(perf){
+    if (perf) {
       perf("correlations", now() - tCorr, { count: correlations.length });
     }
   }
 
   let insights = [];
-  if(els.reviewInsights){
+  if (els.reviewInsights) {
     const tInsights = perf ? now() : 0;
     insights = computeInsights({ state, anchorDate: anchor, includeDay: true, includeWeek: true });
     const dayInsights = insights.filter((entry) => entry.scope === "day");
     const weekInsights = insights.filter((entry) => entry.scope === "week");
     const toneLabel = (tone) => {
-      if(tone === "warn") return "Warn";
-      if(tone === "nudge") return "Nudge";
+      if (tone === "warn") return "Warn";
+      if (tone === "nudge") return "Nudge";
       return "Info";
     };
     const renderCard = (entry) => {
@@ -130,17 +130,30 @@ export function renderReviewScreen({ els, state, anchorDate, escapeHtml, onMatri
       </div>
     `;
     const blocks = [];
-    if(dayInsights.length){
+    if (dayInsights.length) {
       blocks.push(renderGroup(`Day • ${dayInsights[0].scopeKey}`, dayInsights));
     }
-    if(weekInsights.length){
+    if (weekInsights.length) {
       blocks.push(renderGroup(`Week of ${weekInsights[0].scopeKey}`, weekInsights));
     }
     els.reviewInsights.innerHTML = blocks.join("") || `<div class="tiny muted">No insights yet.</div>`;
-    if(perf){
+    if (perf) {
       perf("insights", now() - tInsights, { count: insights.length });
     }
   }
+
+  const legend = `
+    <div class="matrix-legend">
+      <div class="legend-item"><span class="legend-dot skip"></span> — Empty</div>
+      <div class="legend-item"><span class="legend-dot val">P</span> Protein</div>
+      <div class="legend-item"><span class="legend-dot val">C</span> Carbs</div>
+      <div class="legend-item"><span class="legend-dot val">F</span> Fats</div>
+      <div class="legend-item"><span class="legend-dot val">μ</span> Micro</div>
+      <div class="legend-item"><span class="legend-dot flag bad">×</span> Collision</div>
+      <div class="legend-item"><span class="legend-dot flag warn">⚠</span> Oil</div>
+      <div class="legend-item"><span class="legend-dot flag good">◎</span> High-Fat</div>
+    </div>
+  `;
 
   const head = `
     <div class="matrix-row matrix-head">
@@ -166,7 +179,7 @@ export function renderReviewScreen({ els, state, anchorDate, escapeHtml, onMatri
     const flag = (on, glyph, col) => `<div class="matrix-cell flag ${on ? "on" : "empty"}" data-col="${col}">${on ? glyph : "—"}</div>`;
     return `
       <div class="matrix-row" data-date="${escapeHtml(row.dateKey)}">
-        <div class="matrix-date">${escapeHtml(row.dateKey)}</div>
+        <div class="matrix-date">${escapeHtml(row.dateKey.substring(5))}</div>
         ${cell(row.counts.proteins, "proteins")}
         ${cell(row.counts.carbs, "carbs")}
         ${cell(row.counts.fats, "fats")}
@@ -178,23 +191,23 @@ export function renderReviewScreen({ els, state, anchorDate, escapeHtml, onMatri
     `;
   }).join("");
 
-  els.coverageMatrix.innerHTML = head + rows;
-  if(perf){
+  els.coverageMatrix.innerHTML = legend + head + rows;
+  if (perf) {
     perf("matrix", now() - tMatrix, { rows: matrix.length });
   }
   els.coverageMatrix.querySelectorAll(".matrix-row[data-date]").forEach((row) => {
     row.addEventListener("click", (event) => {
       const key = row.dataset.date;
-      if(!key) return;
+      if (!key) return;
       const target = event.target.closest(".matrix-cell");
       const col = target?.dataset?.col || "";
-      if(typeof onMatrixSelect === "function"){
+      if (typeof onMatrixSelect === "function") {
         onMatrixSelect(key, col);
       }
     });
   });
 
-  if(els.rotationPicks){
+  if (els.rotationPicks) {
     const picks = computeRotationPicks({ rosters: state.rosters, logs: state.logs }, { limitPerCategory: 2, dateKeys });
     const tagMap = {
       proteins: "[High P]",
@@ -206,9 +219,9 @@ export function renderReviewScreen({ els, state, anchorDate, escapeHtml, onMatri
       const items = picks[cat] || [];
       return items.map((item) => ({ cat, item }));
     });
-    if(!list.length){
+    if (!list.length) {
       els.rotationPicks.innerHTML = `<div class="tiny muted">No picks yet</div>`;
-    }else{
+    } else {
       els.rotationPicks.innerHTML = list.map((entry, idx) => `
         <div class="pick-row ${idx === 0 ? "active" : ""}" data-cat="${escapeHtml(entry.cat)}">
           <div class="pick-chevron">›</div>

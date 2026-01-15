@@ -9,7 +9,7 @@
  * @param {RouteMap} routes
  * @param {string} defaultRoute
  */
-function buildRouter(root, routes, defaultRoute){
+function buildRouter(root, routes, defaultRoute) {
   const keys = Object.keys(routes);
   const isValid = (route) => keys.includes(route);
 
@@ -20,15 +20,27 @@ function buildRouter(root, routes, defaultRoute){
 
   const applyRoute = (route) => {
     const next = isValid(route) ? route : defaultRoute;
+    if (root.dataset.route === next) return;
     root.dataset.route = next;
-    for(const [name, view] of Object.entries(routes)){
-      if(!view) continue;
-      view.classList.toggle("hidden", name !== next);
-    }
+
+    // [SB-32] Use requestAnimationFrame to coordinate visibility change and avoid flicker
+    requestAnimationFrame(() => {
+      for (const [name, view] of Object.entries(routes)) {
+        if (!view) continue;
+        const isHidden = (name !== next);
+        view.classList.toggle("hidden", isHidden);
+        if (!isHidden) {
+          // Reset scroll for the new view
+          window.scrollTo(0, 0);
+        }
+      }
+    });
+
     root.querySelectorAll("[data-route]").forEach((el) => {
+      // @ts-ignore
       const active = el.dataset.route === next;
       el.classList.toggle("tab-active", active);
-      if(active) el.setAttribute("aria-current", "page");
+      if (active) el.setAttribute("aria-current", "page");
       else el.removeAttribute("aria-current");
     });
   };
@@ -36,9 +48,9 @@ function buildRouter(root, routes, defaultRoute){
   const setRoute = (route, options = {}) => {
     const next = isValid(route) ? route : defaultRoute;
     const push = options.push !== false;
-    if(push){
+    if (push) {
       const hash = `#${next}`;
-      if(window.location.hash !== hash){
+      if (window.location.hash !== hash) {
         window.location.hash = hash;
       }
     }
@@ -56,7 +68,7 @@ function buildRouter(root, routes, defaultRoute){
 /**
  * @param {{ root: HTMLElement, routes: RouteMap, defaultRoute?: string }} opts
  */
-export function initRouter(opts){
+export function initRouter(opts) {
   const { root, routes } = opts;
   const defaultRoute = opts.defaultRoute || "today";
   return buildRouter(root, routes, defaultRoute);

@@ -2,9 +2,9 @@
 
 import { initRouter } from "./router.js";
 
-export function initShell(){
+export function initShell() {
   const root = document.getElementById("app");
-  if(!root) return null;
+  if (!root) return null;
 
   const routes = {
     today: root.querySelector("[data-view='today']"),
@@ -18,13 +18,21 @@ export function initShell(){
 
   root.addEventListener("click", (event) => {
     const target = event.target;
-    if(!(target instanceof Element)) return;
+    if (!(target instanceof Element)) return;
+
+    // [SB-52] Catch theme dots or brand icons to prevent bubble-up redirects
+    if (target.closest(".metrics-dots") || target.closest(".brand-icon") || target.closest(".brand-version")) {
+      event.preventDefault();
+      event.stopPropagation();
+      return;
+    }
+
     const actionEl = target.closest("[data-action]");
-    if(!actionEl || !root.contains(actionEl)) return;
+    if (!actionEl || !root.contains(actionEl)) return;
     const action = actionEl.dataset.action;
-    if(action === "route"){
+    if (action === "route") {
       const route = actionEl.dataset.route;
-      if(route) router.setRoute(route);
+      if (route) router.setRoute(route);
     }
   });
 

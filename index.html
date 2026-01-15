@@ -1,5 +1,6 @@
 <!doctype html>
 <html lang="en">
+
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
@@ -10,11 +11,14 @@
   <link rel="preload" href="assets/fonts/SpaceGrotesk.woff2" as="font" type="font/woff2" crossorigin />
   <link rel="preload" href="assets/fonts/JetBrainsMono.woff2" as="font" type="font/woff2" crossorigin />
 </head>
+
 <body>
-  <svg class="svg-sprite" aria-hidden="true" focusable="false" style="position:absolute;width:0;height:0;overflow:hidden;">
+  <svg class="svg-sprite" aria-hidden="true" focusable="false"
+    style="position:absolute;width:0;height:0;overflow:hidden;">
     <symbol id="i-sun" viewBox="0 0 24 24">
       <circle cx="12" cy="12" r="4" fill="currentColor" />
-      <path d="M12 2v3M12 19v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2 12h3M19 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+      <path d="M12 2v3M12 19v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2 12h3M19 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1"
+        stroke="currentColor" stroke-width="2" stroke-linecap="round" />
     </symbol>
     <symbol id="i-wifi" viewBox="0 0 24 24">
       <path d="M4.5 10.5a10 10 0 0 1 15 0" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" />
@@ -27,11 +31,13 @@
       <rect x="20" y="10" width="2" height="4" rx="1" fill="currentColor" />
     </symbol>
     <symbol id="i-home" viewBox="0 0 24 24">
-      <path d="M4 11l8-7 8 7v8a1 1 0 0 1-1 1h-4v-6h-6v6H5a1 1 0 0 1-1-1v-8z" stroke="currentColor" stroke-width="2" fill="none" stroke-linejoin="round" />
+      <path d="M4 11l8-7 8 7v8a1 1 0 0 1-1 1h-4v-6h-6v6H5a1 1 0 0 1-1-1v-8z" stroke="currentColor" stroke-width="2"
+        fill="none" stroke-linejoin="round" />
     </symbol>
     <symbol id="i-history" viewBox="0 0 24 24">
       <circle cx="12" cy="12" r="8" stroke="currentColor" stroke-width="2" fill="none" />
-      <path d="M12 8v5l3 2" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round" />
+      <path d="M12 8v5l3 2" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round"
+        stroke-linejoin="round" />
     </symbol>
     <symbol id="i-chart" viewBox="0 0 24 24">
       <path d="M4 19h16" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" />
@@ -39,10 +45,12 @@
     </symbol>
     <symbol id="i-settings" viewBox="0 0 24 24">
       <circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="2" fill="none" />
-      <path d="M12 2v3M12 19v3M4.5 4.5l2.1 2.1M17.4 17.4l2.1 2.1M2 12h3M19 12h3M4.5 19.5l2.1-2.1M17.4 6.6l2.1-2.1" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" />
+      <path d="M12 2v3M12 19v3M4.5 4.5l2.1 2.1M17.4 17.4l2.1 2.1M2 12h3M19 12h3M4.5 19.5l2.1-2.1M17.4 6.6l2.1-2.1"
+        stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" />
     </symbol>
     <symbol id="i-arrow-left" viewBox="0 0 24 24">
-      <path d="M15 6l-6 6 6 6" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round" />
+      <path d="M15 6l-6 6 6 6" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round"
+        stroke-linejoin="round" />
     </symbol>
     <symbol id="i-edit" viewBox="0 0 24 24">
       <path d="M4 20h4l10-10-4-4-10 10v4z" stroke="currentColor" stroke-width="2" fill="none" stroke-linejoin="round" />
@@ -57,7 +65,8 @@
       <div class="app-lock-card">
         <div class="app-lock-title">App locked</div>
         <div class="app-lock-sub">Enter your passcode to continue.</div>
-        <input class="field-input" id="appLockInput" type="password" inputmode="numeric" autocomplete="current-password" placeholder="Passcode" />
+        <input class="field-input" id="appLockInput" type="password" inputmode="numeric" autocomplete="current-password"
+          placeholder="Passcode" />
         <button class="btn" id="appLockSubmit" type="button">Unlock</button>
         <div class="tiny muted" id="appLockMessage"></div>
       </div>
@@ -72,17 +81,21 @@
             <div class="home-brand-left">
               <span class="brand-icon" aria-hidden="true">☉</span>
               <div class="brand-copy">
-                <div class="brand-title">SOLAR LOG <span class="brand-version">v4.0</span></div>
+                <div class="brand-title">SOLAR LOG <span class="brand-version">v2.0</span></div>
               </div>
             </div>
             <div class="home-status">
               <span class="status-pill" id="syncStatus">SYNCED</span>
               <span class="status-pill status-muted">
-                <svg class="status-glyph" aria-hidden="true"><use href="#i-wifi"></use></svg>
+                <svg class="status-glyph" aria-hidden="true">
+                  <use href="#i-wifi"></use>
+                </svg>
                 NET:ON
               </span>
               <span class="status-pill status-muted">
-                <svg class="status-glyph" aria-hidden="true"><use href="#i-battery"></use></svg>
+                <svg class="status-glyph" aria-hidden="true">
+                  <use href="#i-battery"></use>
+                </svg>
                 98%
               </span>
             </div>
@@ -95,21 +108,21 @@
               <svg class="solar" id="solarSvg" viewBox="0 0 1000 260" preserveAspectRatio="none" aria-hidden="true">
                 <defs>
                   <filter id="softGlow" x="-40%" y="-40%" width="180%" height="180%">
-                    <feGaussianBlur stdDeviation="6" result="blur"/>
+                    <feGaussianBlur stdDeviation="6" result="blur" />
                     <feColorMatrix type="matrix" values="
                       1 0 0 0 0
                       0 1 0 0 0
                       0 0 1 0 0
                       0 0 0 0.9 0" />
                     <feMerge>
-                      <feMergeNode in="blur"/>
-                      <feMergeNode in="SourceGraphic"/>
+                      <feMergeNode in="blur" />
+                      <feMergeNode in="SourceGraphic" />
                     </feMerge>
                   </filter>
                   <linearGradient id="arcGrad" x1="0" x2="1">
-                    <stop offset="0%" stop-color="var(--sunrise)"/>
-                    <stop offset="50%" stop-color="var(--sun)"/>
-                    <stop offset="100%" stop-color="var(--sunset)"/>
+                    <stop offset="0%" stop-color="var(--sunrise)" />
+                    <stop offset="50%" stop-color="var(--sun)" />
+                    <stop offset="100%" stop-color="var(--sunset)" />
                   </linearGradient>
                 </defs>
 
@@ -135,11 +148,11 @@
             </div>
 
             <div class="time-row">
-            <div class="time-block">
-              <span class="time-label">CURRENT_TIME</span>
-              <span class="time-value" id="currentTime">--:--</span>
-              <span class="time-zone" id="currentTz">—</span>
-            </div>
+              <div class="time-block">
+                <span class="time-label">CURRENT_TIME</span>
+                <span class="time-value" id="currentTime">--:--</span>
+                <span class="time-zone" id="currentTz">—</span>
+              </div>
               <div class="time-controls">
                 <button class="icon-btn" id="prevDay" type="button" aria-label="Previous day">‹</button>
                 <input class="date" id="datePicker" type="date" />
@@ -150,7 +163,7 @@
 
           <section class="segment-deck">
             <div class="segment-head">
-              <div class="segment-title">Segments</div>
+              <div class="segment-title">SEGMENTS</div>
               <button class="btn ghost small" id="copyYesterday" type="button">Copy yesterday</button>
             </div>
             <div class="timeline" id="timeline">
@@ -169,19 +182,19 @@
           <section class="rituals">
             <button class="ritual" id="movedBeforeLunch" type="button" aria-pressed="false">
               <span class="ritual-kicker">Ritual</span>
-              <span class="ritual-title">Move pre-lunch</span>
+              <span class="ritual-title">🏃 Move pre-lunch</span>
               <span class="ritual-sub" id="moveSub">—</span>
             </button>
 
             <button class="ritual" id="trained" type="button" aria-pressed="false">
               <span class="ritual-kicker">Output</span>
-              <span class="ritual-title">Training</span>
+              <span class="ritual-title">💪 Training</span>
               <span class="ritual-sub" id="trainSub">—</span>
             </button>
 
             <button class="ritual" id="highFatDay" type="button" aria-pressed="false">
               <span class="ritual-kicker">Cycle</span>
-              <span class="ritual-title">High-fat day</span>
+              <span class="ritual-title">🥑 High-fat day</span>
               <span class="ritual-sub" id="fatDaySub">—</span>
             </button>
           </section>
@@ -218,21 +231,21 @@
             </div>
             <div class="chips" id="supplementsChips"></div>
             <div class="notes supplements-notes">
-              <label class="notes-label" for="supplementsNotes">Notes</label>
-              <textarea id="supplementsNotes" class="notes-box" placeholder="Optional notes"></textarea>
+              <textarea id="supplementsNotes" class="notes-box" placeholder="Supplements notes (optional)"></textarea>
             </div>
           </div>
 
           <div class="notes" id="notesBlock">
-            <label class="notes-label" for="notes">Notes</label>
-            <textarea id="notes" class="notes-box" placeholder="Short signal. No essays."></textarea>
+            <textarea id="notes" class="notes-box" placeholder="Daily summary (energy, mood, output)..."></textarea>
           </div>
           <div class="redaction-banner" id="redactionBanner" hidden>
             Notes hidden (redaction on)
           </div>
         </div>
         <button class="fab-edit" id="fabEdit" type="button" aria-label="Edit current segment">
-          <svg class="fab-icon" aria-hidden="true"><use href="#i-edit"></use></svg>
+          <svg class="fab-icon" aria-hidden="true">
+            <use href="#i-edit"></use>
+          </svg>
         </button>
       </section>
 
@@ -242,11 +255,16 @@
           <header class="archive-header">
             <div class="archive-header-row">
               <button class="icon-btn" type="button" data-action="route" data-route="today" aria-label="Back to Today">
-                <svg class="tab-glyph" aria-hidden="true"><use href="#i-arrow-left"></use></svg>
+                <svg class="tab-glyph" aria-hidden="true">
+                  <use href="#i-arrow-left"></use>
+                </svg>
               </button>
               <div class="archive-status">SYS: ONLINE</div>
-              <button class="icon-btn" id="tabSettingsAlt" type="button" data-action="route" data-route="settings" aria-label="Settings">
-                <svg class="tab-glyph" aria-hidden="true"><use href="#i-settings"></use></svg>
+              <button class="icon-btn" id="tabSettingsAlt" type="button" data-action="route" data-route="settings"
+                aria-label="Settings">
+                <svg class="tab-glyph" aria-hidden="true">
+                  <use href="#i-settings"></use>
+                </svg>
               </button>
             </div>
             <div class="archive-title">Mission Log <span>Archive</span></div>
@@ -257,8 +275,8 @@
             <div class="archive-filters">
               <div class="field">
                 <label class="field-label" for="historySearch">Search</label>
-                <input class="field-input" id="historySearch" type="search" placeholder="Search roster items, tags, or flags" />
-                <div class="field-help">Matches item names, aliases, or tags (ex: seed_oil).</div>
+                <input class="field-input" id="historySearch" type="search" placeholder="Search roster items or tags" />
+                <div class="field-help">Matches items, aliases, or flags (ex: seed_oil).</div>
               </div>
               <div class="segmented small" id="historyFilters" aria-label="History filters">
                 <button class="seg-btn" type="button" data-filter="collision">Collision</button>
@@ -269,13 +287,17 @@
             </div>
 
             <div class="archive-list" id="historyList"></div>
+            <div class="row cent mt">
+              <button class="btn ghost small" id="historyLoadMore" type="button" hidden>Load more</button>
+            </div>
 
             <details class="archive-panel">
               <summary>Backup + Import</summary>
               <div class="panel-body">
                 <div class="row gap wrap">
                   <button class="btn" id="exportBtn" type="button" data-mode="plain">Export JSON</button>
-                  <button class="btn ghost" id="exportAltBtn" type="button" data-mode="encrypted">Export encrypted</button>
+                  <button class="btn ghost" id="exportAltBtn" type="button" data-mode="encrypted">Export
+                    encrypted</button>
                   <button class="btn ghost" id="exportCsvBtn" type="button">Export CSV</button>
                   <label class="btn ghost" for="importFile">Import</label>
                   <input id="importFile" type="file" accept="application/json" hidden />
@@ -297,7 +319,8 @@
                 <div class="safe-mode-banner hidden" id="safeModeBanner" role="status" aria-live="polite">
                   <div>
                     <div class="safe-mode-title">Safe Mode active</div>
-                    <div class="safe-mode-sub">Editing is disabled. Export a recovery payload or restore a snapshot.</div>
+                    <div class="safe-mode-sub">Editing is disabled. Export a recovery payload or restore a snapshot.
+                    </div>
                   </div>
                   <button class="btn ghost" id="safeModeExport" type="button">Export recovery</button>
                 </div>
@@ -386,7 +409,9 @@
         <div class="metrics-shell">
           <header class="metrics-header">
             <button class="icon-btn" type="button" data-action="route" data-route="today" aria-label="Back to Today">
-              <svg class="tab-glyph" aria-hidden="true"><use href="#i-arrow-left"></use></svg>
+              <svg class="tab-glyph" aria-hidden="true">
+                <use href="#i-arrow-left"></use>
+              </svg>
             </button>
             <div class="metrics-title">
               <div class="metrics-heading">INTEL</div>
@@ -401,7 +426,9 @@
               </div>
             </div>
             <button class="icon-btn" type="button" data-action="route" data-route="settings" aria-label="Settings">
-              <svg class="tab-glyph" aria-hidden="true"><use href="#i-settings"></use></svg>
+              <svg class="tab-glyph" aria-hidden="true">
+                <use href="#i-settings"></use>
+              </svg>
             </button>
           </header>
 
@@ -541,9 +568,12 @@
             </div>
           </div>
 
-          <div class="row gap mt">
-            <button class="btn" id="saveSettings" type="button">Save settings</button>
-            <button class="btn ghost" id="resetToday" type="button">Reset today's logs</button>
+          <div class="danger-zone">
+            <div class="danger-title">Danger Zone</div>
+            <div class="row gap">
+              <button class="btn" id="saveSettings" type="button">Save settings</button>
+              <button class="btn ghost" id="resetToday" type="button">Reset today's logs</button>
+            </div>
           </div>
         </div>
 
@@ -597,7 +627,8 @@
         <div class="panel">
           <div class="section-title">Rosters</div>
           <div class="tiny muted">Edit your default options. You can also add items inside a segment.</div>
-          <div class="tiny muted">Tag hints: carb:starch, carb:fruit, carb:sugar, fat:dense, fat:seed_oil, fat:unknown.</div>
+          <div class="tiny muted">Tag hints: carb:starch, carb:fruit, carb:sugar, fat:dense, fat:seed_oil, fat:unknown.
+          </div>
 
           <div class="roster-block">
             <div class="roster-head">
@@ -668,7 +699,8 @@
             <input type="checkbox" id="privacyEncryptedToggle" />
             Default to encrypted export
           </label>
-          <div class="tiny muted">App lock gates access on launch; blur affects app switcher snapshots; redaction hides Today labels/notes; encrypted export asks for a passphrase.</div>
+          <div class="tiny muted">App lock gates access on launch; blur affects app switcher snapshots; redaction hides
+            Today labels/notes; encrypted export asks for a passphrase.</div>
         </div>
       </section>
 
@@ -684,21 +716,28 @@
     <!-- Bottom Navigation Bar (mockup: ui/mockups/home.html) -->
     <nav class="bottom-nav" data-region="nav" aria-label="Primary">
       <button class="tab tab-active" id="tabToday" type="button" data-action="route" data-route="today">
-        <svg class="tab-glyph" aria-hidden="true"><use href="#i-home"></use></svg>
+        <svg class="tab-glyph" aria-hidden="true">
+          <use href="#i-home"></use>
+        </svg>
         <span class="tab-label">HOME</span>
       </button>
       <button class="tab" id="tabHistory" type="button" data-action="route" data-route="history">
-        <svg class="tab-glyph" aria-hidden="true"><use href="#i-history"></use></svg>
+        <svg class="tab-glyph" aria-hidden="true">
+          <use href="#i-history"></use>
+        </svg>
         <span class="tab-label">LOGS</span>
       </button>
       <button class="tab" id="tabReview" type="button" data-action="route" data-route="review">
-        <svg class="tab-glyph" aria-hidden="true"><use href="#i-chart"></use></svg>
+        <svg class="tab-glyph" aria-hidden="true">
+          <use href="#i-chart"></use>
+        </svg>
         <span class="tab-label">STATS</span>
       </button>
       <button class="tab" id="tabSettings" type="button" data-action="route" data-route="settings">
-        <svg class="tab-glyph" aria-hidden="true"><use href="#i-settings"></use></svg>
+        <svg class="tab-glyph" aria-hidden="true">
+          <use href="#i-settings"></use>
+        </svg>
         <span class="tab-label">CFG</span>
-        <span class="tab-badge" id="outboxBadge" hidden>0</span>
       </button>
     </nav>
 
@@ -828,7 +867,8 @@
                 <button class="seg-btn" type="button" data-value="no">Not high-fat</button>
               </div>
             </div>
-            <div class="flag-help tiny muted" id="flagHelp">Collision auto = fat:dense + carb:starch. High-fat auto = fat:dense.</div>
+            <div class="flag-help tiny muted" id="flagHelp">Collision auto = fat:dense + carb:starch. High-fat auto =
+              fat:dense.</div>
 
             <div class="status-row">
               <div class="row-label">Status</div>
@@ -846,7 +886,8 @@
 
             <div class="sheet-foot">
               <button class="btn ghost" id="clearSegment" type="button">Clear</button>
-              <button class="btn" id="doneSegment" type="button">Log <span class="btn-arrow" aria-hidden="true">›</span></button>
+              <button class="btn" id="doneSegment" type="button">Log <span class="btn-arrow"
+                  aria-hidden="true">›</span></button>
             </div>
           </footer>
         </div>
@@ -868,4 +909,5 @@
 
   <script type="module" src="app/boot.js"></script>
 </body>
+
 </html>

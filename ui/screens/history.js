@@ -9,13 +9,15 @@ export function renderHistoryScreen({
   escapeHtml,
   formatSnapshotTime,
   openDays,
-  filters
-}){
+  filters,
+  page,
+  pageSize
+}) {
   const vm = selectHistoryVm(state);
-  if(els.historySearch && filters){
+  if (els.historySearch && filters) {
     els.historySearch.value = filters.query || "";
   }
-  if(els.historyFilters && filters){
+  if (els.historyFilters && filters) {
     els.historyFilters.querySelectorAll("[data-filter]").forEach((btn) => {
       const key = btn.dataset.filter || "";
       btn.classList.toggle("active", !!filters.flags?.[key]);
@@ -24,10 +26,10 @@ export function renderHistoryScreen({
   const rosterIndex = new Map();
   const rosters = state.rosters || {};
   const rosterCats = ["proteins", "carbs", "fats", "micros", "supplements"];
-  for(const cat of rosterCats){
+  for (const cat of rosterCats) {
     const list = Array.isArray(rosters[cat]) ? rosters[cat] : [];
-    for(const item of list){
-      if(item && item.id) rosterIndex.set(item.id, item);
+    for (const item of list) {
+      if (item && item.id) rosterIndex.set(item.id, item);
     }
   }
 
@@ -44,63 +46,69 @@ export function renderHistoryScreen({
 
   const formatWeekday = (dateKey) => {
     const d = new Date(`${dateKey}T12:00:00`);
-    if(Number.isNaN(d.getTime())) return "—";
+    if (Number.isNaN(d.getTime())) return "—";
     return new Intl.DateTimeFormat(undefined, { weekday: "short" }).format(d).toUpperCase();
   };
 
   const signalLevel = (value) => {
     const num = Number.parseInt(String(value || ""), 10);
-    if(Number.isFinite(num) && num > 0) return Math.min(5, Math.max(1, num));
+    if (Number.isFinite(num) && num > 0) return Math.min(5, Math.max(1, num));
     return 0;
   };
 
   const buildSearchText = (day, issues) => {
     const parts = [];
-    if(!redacted && day?.notes) parts.push(String(day.notes));
+    if (!redacted && day?.notes) parts.push(String(day.notes));
     const segments = day?.segments || {};
-    for(const seg of Object.values(segments)){
-      if(!seg || typeof seg !== "object") continue;
-      if(!redacted && seg.notes) parts.push(String(seg.notes));
+    for (const seg of Object.values(segments)) {
+      if (!seg || typeof seg !== "object") continue;
+      if (!redacted && seg.notes) parts.push(String(seg.notes));
       const cats = ["proteins", "carbs", "fats", "micros"];
-      for(const cat of cats){
+      for (const cat of cats) {
         const ids = Array.isArray(seg[cat]) ? seg[cat] : [];
-        for(const id of ids){
+        for (const id of ids) {
           const item = rosterIndex.get(id);
-          if(!item) continue;
+          if (!item) continue;
           parts.push(item.label || "");
-          if(Array.isArray(item.aliases)) parts.push(item.aliases.join(" "));
-          if(Array.isArray(item.tags)) parts.push(item.tags.join(" "));
+          if (Array.isArray(item.aliases)) parts.push(item.aliases.join(" "));
+          if (Array.isArray(item.tags)) parts.push(item.tags.join(" "));
         }
       }
     }
-    if(issues?.collision) parts.push("collision");
-    if(issues?.seedOil) parts.push("seed oil", "seed-oil", "seedoil");
-    if(issues?.highFat) parts.push("high fat", "high-fat", "highfat");
+    if (issues?.collision) parts.push("collision");
+    if (issues?.seedOil) parts.push("seed oil", "seed-oil", "seedoil");
+    if (issues?.highFat) parts.push("high fat", "high-fat", "highfat");
     return parts.join(" ").toLowerCase();
   };
 
   const hasNotes = (day) => {
-    if(day?.notes && String(day.notes).trim()) return true;
-    if(day?.supplements?.notes && String(day.supplements.notes).trim()) return true;
-    for(const seg of Object.values(day?.segments || {})){
-      if(seg?.notes && String(seg.notes).trim()) return true;
+    if (day?.notes && String(day.notes).trim()) return true;
+    if (day?.supplements?.notes && String(day.supplements.notes).trim()) return true;
+    for (const seg of Object.values(day?.segments || {})) {
+      if (seg?.notes && String(seg.notes).trim()) return true;
     }
     return false;
   };
 
-  els.historyList.innerHTML = vm.items.filter((item) => {
+  const filtered = vm.items.filter((item) => {
     const day = state.logs?.[item.dateKey];
-    if(!day) return false;
-    if(tokens.length){
+    if (!day) return false;
+    if (tokens.length) {
       const text = buildSearchText(day, item.issues);
-      if(!tokens.every((token) => text.includes(token))) return false;
+      if (!tokens.every((token) => text.includes(token))) return false;
     }
-    if(activeFlags.collision && !item.issues?.collision) return false;
-    if(activeFlags.seedOil && !item.issues?.seedOil) return false;
-    if(activeFlags.highFat && !item.issues?.highFat) return false;
-    if(activeFlags.notes && !hasNotes(day)) return false;
+    if (activeFlags.collision && !item.issues?.collision) return false;
+    if (activeFlags.seedOil && !item.issues?.seedOil) return false;
+    if (activeFlags.highFat && !item.issues?.highFat) return false;
+    if (activeFlags.notes && !hasNotes(day)) return false;
     return true;
-  }).map((item) => {
+  });
+
+  const limit = (page || 1) * (pageSize || 10);
+  const items = filtered.slice(0, limit);
+
+  els.historyList.innerHTML = items.map((item) => {
+    // ... rest of item mapping (already mostly the same) ...
     const k = item.dateKey;
     const all = item.counts || { proteins: 0, carbs: 0, fats: 0, micros: 0 };
     const issues = item.issues || { collision: false, seedOil: false, highFat: false };
@@ -183,13 +191,13 @@ export function renderHistoryScreen({
               <div class="day-detail-block">
                 <div class="day-detail-label">Signals</div>
                 <div class="segmented small mt" data-field="energy" data-date="${escapeHtml(k)}">
-                  ${["1","2","3","4","5"].map((v) => `<button class="seg-btn ${String(day.energy || "") === v ? "active" : ""}" type="button" data-action="set-signal" data-field="energy" data-value="${v}" data-date="${escapeHtml(k)}">${v}</button>`).join("")}
+                  ${["1", "2", "3", "4", "5"].map((v) => `<button class="seg-btn ${String(day.energy || "") === v ? "active" : ""}" type="button" data-action="set-signal" data-field="energy" data-value="${v}" data-date="${escapeHtml(k)}">${v}</button>`).join("")}
                 </div>
                 <div class="segmented small mt" data-field="mood" data-date="${escapeHtml(k)}">
-                  ${["1","2","3","4","5"].map((v) => `<button class="seg-btn ${String(day.mood || "") === v ? "active" : ""}" type="button" data-action="set-signal" data-field="mood" data-value="${v}" data-date="${escapeHtml(k)}">${v}</button>`).join("")}
+                  ${["1", "2", "3", "4", "5"].map((v) => `<button class="seg-btn ${String(day.mood || "") === v ? "active" : ""}" type="button" data-action="set-signal" data-field="mood" data-value="${v}" data-date="${escapeHtml(k)}">${v}</button>`).join("")}
                 </div>
                 <div class="segmented small mt" data-field="cravings" data-date="${escapeHtml(k)}">
-                  ${["1","2","3","4","5"].map((v) => `<button class="seg-btn ${String(day.cravings || "") === v ? "active" : ""}" type="button" data-action="set-signal" data-field="cravings" data-value="${v}" data-date="${escapeHtml(k)}">${v}</button>`).join("")}
+                  ${["1", "2", "3", "4", "5"].map((v) => `<button class="seg-btn ${String(day.cravings || "") === v ? "active" : ""}" type="button" data-action="set-signal" data-field="cravings" data-value="${v}" data-date="${escapeHtml(k)}">${v}</button>`).join("")}
                 </div>
               </div>
               <div class="day-detail-block">
@@ -199,18 +207,18 @@ export function renderHistoryScreen({
             </div>
             <div class="day-detail-block">
               <div class="day-detail-label">Segments</div>
-              ${["ftn","lunch","dinner","late"].map((segId) => {
-                const seg = segs[segId] || {};
-                const flags = effectiveSegmentFlags(seg, rosters);
-                const status = seg.status || "unlogged";
-                const counts = {
-                  P: Array.isArray(seg.proteins) ? seg.proteins.length : 0,
-                  C: Array.isArray(seg.carbs) ? seg.carbs.length : 0,
-                  F: Array.isArray(seg.fats) ? seg.fats.length : 0,
-                  M: Array.isArray(seg.micros) ? seg.micros.length : 0
-                };
-                const notesOn = !!(seg.notes && String(seg.notes).trim());
-                return `
+              ${["ftn", "lunch", "dinner", "late"].map((segId) => {
+      const seg = segs[segId] || {};
+      const flags = effectiveSegmentFlags(seg, rosters);
+      const status = seg.status || "unlogged";
+      const counts = {
+        P: Array.isArray(seg.proteins) ? seg.proteins.length : 0,
+        C: Array.isArray(seg.carbs) ? seg.carbs.length : 0,
+        F: Array.isArray(seg.fats) ? seg.fats.length : 0,
+        M: Array.isArray(seg.micros) ? seg.micros.length : 0
+      };
+      const notesOn = !!(seg.notes && String(seg.notes).trim());
+      return `
                   <div class="segment-summary" data-date="${escapeHtml(k)}" data-seg="${escapeHtml(segId)}">
                     <div>
                       <div class="segment-summary-title">${escapeHtml(segId)}</div>
@@ -228,7 +236,7 @@ export function renderHistoryScreen({
                     </div>
                   </div>
                 `;
-              }).join("")}
+    }).join("")}
             </div>
           </div>
         </div>
@@ -236,13 +244,19 @@ export function renderHistoryScreen({
     `;
   }).join("");
 
-  if(els.exportBtn){
+  if (els.historyLoadMore) {
+    const hasMore = filtered.length > limit;
+    els.historyLoadMore.hidden = !hasMore;
+    els.historyLoadMore.textContent = `Load more (${filtered.length - limit} remaining)`;
+  }
+
+  if (els.exportBtn) {
     const encDefault = !!(state.settings?.privacy && state.settings.privacy.exportEncryptedByDefault);
     const primaryMode = encDefault ? "encrypted" : "plain";
     const altMode = encDefault ? "plain" : "encrypted";
     els.exportBtn.textContent = encDefault ? "Export encrypted" : "Export JSON";
     els.exportBtn.dataset.mode = primaryMode;
-    if(els.exportAltBtn){
+    if (els.exportAltBtn) {
       els.exportAltBtn.textContent = encDefault ? "Export JSON" : "Export encrypted";
       els.exportAltBtn.dataset.mode = altMode;
       els.exportAltBtn.hidden = false;

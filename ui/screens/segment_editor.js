@@ -14,45 +14,45 @@ export function createSegmentEditor({
   renderChipSet,
   getRosterSearch,
   setRosterSearch
-}){
-  function ensureRosterSearch(){
+}) {
+  function ensureRosterSearch() {
     let search = getRosterSearch();
-    if(!search || typeof search !== "object"){
+    if (!search || typeof search !== "object") {
       search = { proteins: "", carbs: "", fats: "", micros: "" };
       setRosterSearch(search);
     }
     return search;
   }
 
-  function setSegmentedActive(root, value){
-    if(!root) return;
+  function setSegmentedActive(root, value) {
+    if (!root) return;
     const btns = [...root.querySelectorAll(".seg-btn")];
     btns.forEach((btn) => btn.classList.toggle("active", btn.dataset.value === value));
   }
 
-  function updateSheetHints(dateKey, segId){
-    if(!els.flagHelp) return;
+  function updateSheetHints(dateKey, segId) {
+    if (!els.flagHelp) return;
     const day = getDay(dateKey);
     const seg = day.segments[segId];
-    if(!seg) return;
+    if (!seg) return;
 
     const state = getState();
     const effective = effectiveSegmentFlags(seg, state.rosters);
 
-    if(effective.seedOilHint && seg.seedOil !== "yes" && seg.seedOil !== "none"){
+    if (effective.seedOilHint && seg.seedOil !== "yes" && seg.seedOil !== "none") {
       els.flagHelp.textContent = "⚠️ Potential seed oils detected in fats. Check tags.";
       els.flagHelp.classList.add("warn-text");
-    }else{
+    } else {
       els.flagHelp.textContent = "Collision auto = fat:dense + carb:starch. High‑fat auto = fat:dense.";
       els.flagHelp.classList.remove("warn-text");
     }
   }
 
-  function updateSegmentProgress(dateKey, segId){
-    if(!els.sheetProgress) return;
+  function updateSegmentProgress(dateKey, segId) {
+    if (!els.sheetProgress) return;
     const day = getDay(dateKey);
     const seg = day.segments[segId];
-    if(!seg) return;
+    if (!seg) return;
     const filled = [
       Array.isArray(seg.proteins) && seg.proteins.length,
       Array.isArray(seg.carbs) && seg.carbs.length,
@@ -64,15 +64,15 @@ export function createSegmentEditor({
     bars.forEach((bar, idx) => bar.classList.toggle("on", idx < activeBars));
   }
 
-  function refreshSegmentStatus(dateKey, segId){
+  function refreshSegmentStatus(dateKey, segId) {
     const day = getDay(dateKey);
     const seg = day.segments[segId];
-    if(!seg || !els.segStatus) return;
+    if (!seg || !els.segStatus) return;
     setSegmentedActive(els.segStatus, seg.status || "unlogged");
     updateSegmentProgress(dateKey, segId);
   }
 
-  function openSegment(dateKey, segId){
+  function openSegment(dateKey, segId) {
     setCurrentSegmentId(segId);
 
     const state = getState();
@@ -84,17 +84,17 @@ export function createSegmentEditor({
     els.sheetTitle.textContent = def ? def.label : segId.toUpperCase();
     const range = def ? formatRange(def.start, def.end) : "";
     const tag = def ? def.sub : "";
-    const last = seg.tsLast ? ` • logged ${new Date(seg.tsLast).toLocaleTimeString([], {hour:"2-digit", minute:"2-digit"})}` : "";
-    els.sheetSub.textContent = `${tag} • ${range}${last}`;
-    if(els.sheetWindowLabel){
+    const last = seg.tsLast ? ` • logged ${new Date(seg.tsLast).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}` : "";
+    els.sheetSub.textContent = `${tag}${last}`;
+    if (els.sheetWindowLabel) {
       els.sheetWindowLabel.textContent = (def && def.sub) ? def.sub.toUpperCase() : "WINDOW";
     }
-    if(els.sheetWindowTime){
+    if (els.sheetWindowTime) {
       els.sheetWindowTime.textContent = range || "—";
     }
 
     els.ftnModeRow.classList.toggle("hidden", segId !== "ftn");
-    if(segId === "ftn"){
+    if (segId === "ftn") {
       setSegmentedActive(els.ftnModeSeg, seg.ftnMode || "");
     }
 
@@ -127,12 +127,12 @@ export function createSegmentEditor({
 
     els.sheet.classList.remove("hidden");
     els.sheet.setAttribute("aria-hidden", "false");
-    if(els.closeSheet){
+    if (els.closeSheet) {
       requestAnimationFrame(() => els.closeSheet.focus());
     }
   }
 
-  function closeSegment(){
+  function closeSegment() {
     els.sheet.classList.add("hidden");
     els.sheet.setAttribute("aria-hidden", "true");
     setCurrentSegmentId(null);

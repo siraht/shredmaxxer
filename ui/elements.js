@@ -1,6 +1,6 @@
 // @ts-check
 
-export function getElements(){
+export function getElements() {
   return {
     // tabs/views
     tabToday: document.getElementById("tabToday"),
@@ -73,6 +73,7 @@ export function getElements(){
 
     // history
     historyList: document.getElementById("historyList"),
+    historyLoadMore: document.getElementById("historyLoadMore"),
     historySearch: document.getElementById("historySearch"),
     historyFilters: document.getElementById("historyFilters"),
     exportBtn: document.getElementById("exportBtn"),

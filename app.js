@@ -142,64 +142,64 @@ const DEFAULT_SETTINGS = {
 
 const SEGMENTS = [
   { id: "ftn", label: "FTN", sub: "Carb window" },
-  { id: "lunch", label: "Lunch", sub: "Carb + protein" },
-  { id: "dinner", label: "Dinner", sub: "Protein + fat" },
-  { id: "late", label: "Late", sub: "Bed / damage control" }
+  { id: "lunch", label: "LUNCH", sub: "Carb + protein" },
+  { id: "dinner", label: "DINNER", sub: "Protein + fat" },
+  { id: "late", label: "LATE", sub: "Bed / damage control" }
 ];
 
-function deepClone(x){
+function deepClone(x) {
   return (typeof structuredClone === "function")
     ? structuredClone(x)
     : JSON.parse(JSON.stringify(x));
 }
 
-function yyyyMmDd(d){
+function yyyyMmDd(d) {
   return dateToKey(d);
 }
 
-function dateFromKey(dateKey){
+function dateFromKey(dateKey) {
   return new Date(`${dateKey}T12:00:00`);
 }
 
-function clamp(n, a, b){ return Math.max(a, Math.min(b, n)); }
+function clamp(n, a, b) { return Math.max(a, Math.min(b, n)); }
 
-function parseTimeToMinutes(hhmm){
-  if(!hhmm || !/^\d{2}:\d{2}$/.test(hhmm)) return 0;
+function parseTimeToMinutes(hhmm) {
+  if (!hhmm || !/^\d{2}:\d{2}$/.test(hhmm)) return 0;
   const [h, m] = hhmm.split(":").map(Number);
   return (h * 60 + m);
 }
 
-function minutesToTime(m){
+function minutesToTime(m) {
   m = ((m % 1440) + 1440) % 1440;
   const hh = String(Math.floor(m / 60)).padStart(2, "0");
   const mm = String(m % 60).padStart(2, "0");
   return `${hh}:${mm}`;
 }
 
-function fmtTime(hhmm){
+function fmtTime(hhmm) {
   // display 24h because that's what <input type=time> uses
   return hhmm || "—";
 }
 
-function safeLocalStorageSet(key, value){
-  try{
-    if(typeof localStorage === "undefined") return;
+function safeLocalStorageSet(key, value) {
+  try {
+    if (typeof localStorage === "undefined") return;
     localStorage.setItem(key, value);
-  }catch(e){
+  } catch (e) {
     // ignore localStorage failures (blocked/quota/etc.)
   }
 }
 
-function safeLocalStorageGet(key){
-  try{
-    if(typeof localStorage === "undefined") return null;
+function safeLocalStorageGet(key) {
+  try {
+    if (typeof localStorage === "undefined") return null;
     return localStorage.getItem(key);
-  }catch(e){
+  } catch (e) {
     return null;
   }
 }
 
-function escapeHtml(str){
+function escapeHtml(str) {
   return String(str)
     .replaceAll("&", "&amp;")
     .replaceAll("<", "&lt;")
@@ -208,12 +208,12 @@ function escapeHtml(str){
     .replaceAll("'", "&#039;");
 }
 
-function nowMinutes(){
+function nowMinutes() {
   const d = new Date();
   return d.getHours() * 60 + d.getMinutes();
 }
 
-function createDefaultState(){
+function createDefaultState() {
   const now = new Date();
   return {
     version: 4,
@@ -231,7 +231,7 @@ function createDefaultState(){
   };
 }
 
-function migrateFromLegacy(old){
+function migrateFromLegacy(old) {
   // old shape: { settings?, rosters?, logs: {dateKey: {ftn, movedBeforeLunch, ... , proteins, carbs, fats, micros}}}
   const s = {
     version: 3,
@@ -240,9 +240,9 @@ function migrateFromLegacy(old){
     logs: {}
   };
 
-  if(old && typeof old === "object"){
-    if(old.settings) s.settings = mergeSettings(s.settings, old.settings);
-    if(old.rosters) s.rosters = {
+  if (old && typeof old === "object") {
+    if (old.settings) s.settings = mergeSettings(s.settings, old.settings);
+    if (old.rosters) s.rosters = {
       proteins: Array.isArray(old.rosters.proteins) ? old.rosters.proteins : s.rosters.proteins,
       carbs: Array.isArray(old.rosters.carbs) ? old.rosters.carbs : s.rosters.carbs,
       fats: Array.isArray(old.rosters.fats) ? old.rosters.fats : s.rosters.fats,
@@ -250,8 +250,8 @@ function migrateFromLegacy(old){
       supplements: Array.isArray(old.rosters.supplements) ? old.rosters.supplements : s.rosters.supplements
     };
 
-    if(old.logs && typeof old.logs === "object"){
-      for(const [dateKey, lg] of Object.entries(old.logs)){
+    if (old.logs && typeof old.logs === "object") {
+      for (const [dateKey, lg] of Object.entries(old.logs)) {
         const d = createDefaultDay();
         // carry daily toggles
         d.movedBeforeLunch = !!lg.movedBeforeLunch;
@@ -263,17 +263,17 @@ function migrateFromLegacy(old){
         d.notes = lg.notes || "";
 
         // map old FTN
-        if(lg.ftn) d.segments.ftn.ftnMode = lg.ftn; // ftn|lite|off
+        if (lg.ftn) d.segments.ftn.ftnMode = lg.ftn; // ftn|lite|off
 
         // map old seed oils + collision heuristically to lunch
-        if(lg.seedOilExposure) d.segments.lunch.seedOil = lg.seedOilExposure; // none|yes
-        if(lg.fuelSegmentation === "collision") d.segments.lunch.collision = "yes";
+        if (lg.seedOilExposure) d.segments.lunch.seedOil = lg.seedOilExposure; // none|yes
+        if (lg.fuelSegmentation === "collision") d.segments.lunch.collision = "yes";
 
         // old diversity gets shoved into Lunch (historical; user can ignore)
-        if(Array.isArray(lg.proteins)) d.segments.lunch.proteins = [...lg.proteins];
-        if(Array.isArray(lg.carbs)) d.segments.lunch.carbs = [...lg.carbs];
-        if(Array.isArray(lg.fats)) d.segments.lunch.fats = [...lg.fats];
-        if(Array.isArray(lg.micros)) d.segments.lunch.micros = [...lg.micros];
+        if (Array.isArray(lg.proteins)) d.segments.lunch.proteins = [...lg.proteins];
+        if (Array.isArray(lg.carbs)) d.segments.lunch.carbs = [...lg.carbs];
+        if (Array.isArray(lg.fats)) d.segments.lunch.fats = [...lg.fats];
+        if (Array.isArray(lg.micros)) d.segments.lunch.micros = [...lg.micros];
 
         s.logs[dateKey] = d;
       }
@@ -286,14 +286,14 @@ function migrateFromLegacy(old){
   });
 }
 
-async function loadState(){
+async function loadState() {
   // Try v4 storage adapter first (IndexedDB or localStorage fallback)
   try {
     const v4State = await storageAdapter.loadState();
-    if(v4State && (v4State.version === 4 || v4State.meta?.version === 4)) {
+    if (v4State && (v4State.version === 4 || v4State.meta?.version === 4)) {
       return finalizeLoadedState(hydrateState(v4State));
     }
-  } catch(e) {
+  } catch (e) {
     console.warn("Storage adapter load failed, will try legacy localStorage", e);
     noteIntegrityIssue("storage_open_failed", e);
   }
@@ -301,11 +301,11 @@ async function loadState(){
   // Fallback: check legacy localStorage keys for migration
   // Prefer v4 key in localStorage
   const raw = safeLocalStorageGet(STORAGE_KEY);
-  if(raw){
-    try{
+  if (raw) {
+    try {
       const obj = JSON.parse(raw);
-      if(obj && obj.version === 4) return finalizeLoadedState(hydrateState(obj));
-      if(obj && obj.version === 3){
+      if (obj && obj.version === 4) return finalizeLoadedState(hydrateState(obj));
+      if (obj && obj.version === 3) {
         return finalizeLoadedState(migrateV3ToV4(obj, {
           appVersion: APP_VERSION,
           storageMode: "localStorage",
@@ -313,7 +313,7 @@ async function loadState(){
         }));
       }
       return finalizeLoadedState(migrateFromLegacy(obj));
-    }catch(e){
+    } catch (e) {
       console.warn("State parse failed", e);
       noteIntegrityIssue("state_parse_failed", e);
     }
@@ -321,8 +321,8 @@ async function loadState(){
 
   // Fallback: migrate from v3 key
   const legacyRaw = safeLocalStorageGet(LEGACY_KEY_V3);
-  if(legacyRaw){
-    try{
+  if (legacyRaw) {
+    try {
       const legacy = JSON.parse(legacyRaw);
       const migrated = legacy && legacy.version === 3
         ? migrateV3ToV4(legacy, {
@@ -333,7 +333,7 @@ async function loadState(){
         : migrateFromLegacy(legacy);
       // don't delete legacy automatically; user may still be using older build
       return finalizeLoadedState(migrated);
-    }catch(e){
+    } catch (e) {
       console.warn("Legacy parse failed", e);
       noteIntegrityIssue("legacy_parse_failed", e);
     }
@@ -341,12 +341,12 @@ async function loadState(){
 
   // Fallback: migrate from v1 key
   const legacyV1Raw = safeLocalStorageGet(LEGACY_KEY_V1);
-  if(legacyV1Raw){
-    try{
+  if (legacyV1Raw) {
+    try {
       const legacy = JSON.parse(legacyV1Raw);
       const migrated = migrateFromLegacy(legacy);
       return finalizeLoadedState(migrated);
-    }catch(e){
+    } catch (e) {
       console.warn("Legacy parse failed", e);
       noteIntegrityIssue("legacy_parse_failed", e);
     }
@@ -355,9 +355,9 @@ async function loadState(){
   return finalizeLoadedState(createDefaultState());
 }
 
-function finalizeLoadedState(nextState){
+function finalizeLoadedState(nextState) {
   const validation = validateImportPayload(nextState);
-  if(!validation.ok){
+  if (!validation.ok) {
     const detail = Array.isArray(validation.errors) && validation.errors.length
       ? validation.errors[0]
       : "validation_failed";
@@ -366,27 +366,27 @@ function finalizeLoadedState(nextState){
   return nextState;
 }
 
-function hydrateState(obj){
+function hydrateState(obj) {
   const s = createDefaultState();
-  if(obj.meta) s.meta = { ...s.meta, ...obj.meta };
-  if(obj.settings) s.settings = mergeSettings(s.settings, obj.settings);
-  if(obj.insights) s.insights = mergeInsightsState(s.insights, obj.insights);
-  if(obj.rosters){
-    for(const k of ["proteins", "carbs", "fats", "micros", "supplements"]){
-      if(Array.isArray(obj.rosters[k])) s.rosters[k] = obj.rosters[k];
+  if (obj.meta) s.meta = { ...s.meta, ...obj.meta };
+  if (obj.settings) s.settings = mergeSettings(s.settings, obj.settings);
+  if (obj.insights) s.insights = mergeInsightsState(s.insights, obj.insights);
+  if (obj.rosters) {
+    for (const k of ["proteins", "carbs", "fats", "micros", "supplements"]) {
+      if (Array.isArray(obj.rosters[k])) s.rosters[k] = obj.rosters[k];
     }
   }
-  if(obj.logs && typeof obj.logs === "object"){
+  if (obj.logs && typeof obj.logs === "object") {
     s.logs = obj.logs;
-    for(const day of Object.values(s.logs)){
-      if(!day || typeof day !== "object") continue;
+    for (const day of Object.values(s.logs)) {
+      if (!day || typeof day !== "object") continue;
       day.highFatDay = normalizeTri(day.highFatDay);
     }
   }
-  if(obj.dayIndex && typeof obj.dayIndex === "object"){
+  if (obj.dayIndex && typeof obj.dayIndex === "object") {
     s.dayIndex = obj.dayIndex;
   }
-  if(obj.weekIndex && typeof obj.weekIndex === "object"){
+  if (obj.weekIndex && typeof obj.weekIndex === "object") {
     s.weekIndex = obj.weekIndex;
   }
   s.version = 4;
@@ -398,52 +398,56 @@ let syncEngine = null;
 let ui = null;
 let syncRenderTimer = null;
 
-function canSync(){
+function canSync() {
   return !isSafeMode() && state.settings?.sync?.mode === "hosted";
 }
 
-function updateSyncMeta(patch){
+function updateSyncMeta(patch) {
   const next = { ...(state.meta.sync || {}), ...(patch || {}) };
   state.meta.sync = next;
   persistMeta().catch((e) => console.error("Persist meta failed:", e));
-  if(ui && typeof ui.renderAll === "function"){
-    if(!syncRenderTimer){
-      syncRenderTimer = setTimeout(() => {
-        syncRenderTimer = null;
-        ui.renderAll();
-      }, 0);
+  if (ui) {
+    if (typeof ui.renderSyncStatus === "function") {
+      ui.renderSyncStatus();
+    } else if (typeof ui.renderAll === "function") {
+      if (!syncRenderTimer) {
+        syncRenderTimer = setTimeout(() => {
+          syncRenderTimer = null;
+          ui.renderAll();
+        }, 0);
+      }
     }
   }
 }
 
-function enqueueSync(key, value){
-  if(!syncEngine || !canSync()) return;
+function enqueueSync(key, value) {
+  if (!syncEngine || !canSync()) return;
   syncEngine.enqueueRecord(key, value).catch((e) => {
     console.warn("Sync enqueue failed:", e);
   });
 }
 
-function enqueueFullSync(){
-  if(!syncEngine || !canSync()) return;
+function enqueueFullSync() {
+  if (!syncEngine || !canSync()) return;
   enqueueSync("settings", state.settings);
   enqueueSync("rosters", state.rosters);
   enqueueSync("insights", state.insights);
-  for(const [dateKey, day] of Object.entries(state.logs || {})){
+  for (const [dateKey, day] of Object.entries(state.logs || {})) {
     enqueueSync(`logs/${dateKey}`, day);
   }
 }
 
 async function initializeState() {
   integrityIssue = null;
-  try{
+  try {
     state = await loadState();
-  }catch(e){
+  } catch (e) {
     console.error("State load failed:", e);
     noteIntegrityIssue("state_load_failed", e);
     state = createDefaultState();
   }
   const openError = getStorageOpenError();
-  if(openError){
+  if (openError) {
     noteIntegrityIssue("storage_open_failed", openError);
   }
   applyIntegrityStatus();
@@ -455,15 +459,15 @@ async function initializeState() {
   return state;
 }
 
-function getActiveDateKey(){
+function getActiveDateKey() {
   return activeDayKey(new Date(), state.settings);
 }
 
-function getActiveDate(){
+function getActiveDate() {
   return dateFromKey(getActiveDateKey());
 }
 
-function getWeekStartSetting(){
+function getWeekStartSetting() {
   const raw = state?.settings?.weekStart;
   return Number.isFinite(raw) && raw >= 0 && raw <= 6 ? raw : 0;
 }
@@ -474,64 +478,64 @@ let currentSegmentId = null;
 async function persistDay(dateKey, dayLog) {
   try {
     await storageAdapter.saveDay(dateKey, dayLog);
-  } catch(e) {
+  } catch (e) {
     console.error("Failed to persist day:", e);
     // Fallback to localStorage for safety
     safeLocalStorageSet(STORAGE_KEY, JSON.stringify(state));
   }
 }
 
-function scheduleIndexUpdate(dateKey){
-  if(isSafeMode()) return;
+function scheduleIndexUpdate(dateKey) {
+  if (isSafeMode()) return;
   updateIndexesForDay({ state, dateKey }).catch((e) => {
     console.error("Index update failed:", e);
   });
 }
 
-function scheduleIndexRebuild(){
-  if(isSafeMode()) return;
+function scheduleIndexRebuild() {
+  if (isSafeMode()) return;
   rebuildIndexes(state).catch((e) => {
     console.error("Index rebuild failed:", e);
   });
 }
 
-async function loadIndexCaches(){
-  if(typeof storageAdapter.listDayIndex !== "function" || typeof storageAdapter.listWeekIndex !== "function"){
+async function loadIndexCaches() {
+  if (typeof storageAdapter.listDayIndex !== "function" || typeof storageAdapter.listWeekIndex !== "function") {
     state.dayIndex = {};
     state.weekIndex = {};
     return;
   }
-  try{
+  try {
     const dayIndex = await storageAdapter.listDayIndex();
     const weekIndex = await storageAdapter.listWeekIndex();
     state.dayIndex = dayIndex && typeof dayIndex === "object" ? dayIndex : {};
     state.weekIndex = weekIndex && typeof weekIndex === "object" ? weekIndex : {};
-  }catch(e){
+  } catch (e) {
     console.error("Failed to load indexes:", e);
     state.dayIndex = {};
     state.weekIndex = {};
   }
 }
 
-function areIndexCachesFresh(){
+function areIndexCachesFresh() {
   const logs = state.logs || {};
   const dayIndex = state.dayIndex || {};
   const weekIndex = state.weekIndex || {};
-  for(const [dateKey, day] of Object.entries(logs)){
-    if(!isDayIndexFresh(dayIndex?.[dateKey], day)) return false;
+  for (const [dateKey, day] of Object.entries(logs)) {
+    if (!isDayIndexFresh(dayIndex?.[dateKey], day)) return false;
   }
   const weekStart = getWeekStartSetting();
   const weekKeys = new Set(Object.keys(logs).map((key) => getWeekKeyFromDateKey(key, weekStart)));
-  for(const weekKey of weekKeys){
-    if(!isWeekIndexFresh(weekIndex?.[weekKey], logs)) return false;
+  for (const weekKey of weekKeys) {
+    if (!isWeekIndexFresh(weekIndex?.[weekKey], logs)) return false;
   }
   return true;
 }
 
-async function ensureIndexCaches(){
-  if(isSafeMode()) return;
+async function ensureIndexCaches() {
+  if (isSafeMode()) return;
   await loadIndexCaches();
-  if(!areIndexCachesFresh()){
+  if (!areIndexCachesFresh()) {
     scheduleIndexRebuild();
   }
 }
@@ -539,7 +543,7 @@ async function ensureIndexCaches(){
 async function persistRosters() {
   try {
     await storageAdapter.saveRosters(state.rosters);
-  } catch(e) {
+  } catch (e) {
     console.error("Failed to persist rosters:", e);
     safeLocalStorageSet(STORAGE_KEY, JSON.stringify(state));
   }
@@ -548,16 +552,16 @@ async function persistRosters() {
 async function persistSettings() {
   try {
     await storageAdapter.saveSettings(state.settings);
-  } catch(e) {
+  } catch (e) {
     console.error("Failed to persist settings:", e);
     safeLocalStorageSet(STORAGE_KEY, JSON.stringify(state));
   }
 }
 
-async function persistMeta(){
-  try{
+async function persistMeta() {
+  try {
     await storageAdapter.saveMeta(state.meta);
-  }catch(e){
+  } catch (e) {
     console.error("Failed to persist meta:", e);
     safeLocalStorageSet(STORAGE_KEY, JSON.stringify(state));
   }
@@ -565,68 +569,68 @@ async function persistMeta(){
 
 async function persistInsights() {
   try {
-    if(storageAdapter.saveInsights){
+    if (storageAdapter.saveInsights) {
       await storageAdapter.saveInsights(state.insights);
-    }else{
+    } else {
       safeLocalStorageSet(STORAGE_KEY, JSON.stringify(state));
     }
-  } catch(e) {
+  } catch (e) {
     console.error("Failed to persist insights:", e);
     safeLocalStorageSet(STORAGE_KEY, JSON.stringify(state));
   }
 }
 
 async function persistAll() {
-  if(isSafeMode()) return;
+  if (isSafeMode()) return;
   try {
     await storageAdapter.saveMeta(state.meta);
     await storageAdapter.saveSettings(state.settings);
-    if(storageAdapter.saveInsights){
+    if (storageAdapter.saveInsights) {
       await storageAdapter.saveInsights(state.insights);
     }
     await storageAdapter.saveRosters(state.rosters);
     for (const [dateKey, dayLog] of Object.entries(state.logs)) {
       await storageAdapter.saveDay(dateKey, dayLog);
     }
-  } catch(e) {
+  } catch (e) {
     console.error("Failed to persist all state:", e);
     safeLocalStorageSet(STORAGE_KEY, JSON.stringify(state));
   }
 }
 
-async function applyRemoteDay(dateKey, dayLog){
+async function applyRemoteDay(dateKey, dayLog) {
   state.logs[dateKey] = deepClone(dayLog);
   await storageAdapter.saveDay(dateKey, dayLog);
   scheduleIndexUpdate(dateKey);
 }
 
-async function applyRemoteSettings(settings){
+async function applyRemoteSettings(settings) {
   state.settings = mergeSettings(state.settings, settings);
   updateDstClampDiagnostics();
   await storageAdapter.saveSettings(state.settings);
   scheduleIndexRebuild();
 }
 
-async function applyRemoteRosters(rosters){
+async function applyRemoteRosters(rosters) {
   state.rosters = mergeRosters(state.rosters, rosters, { dedupeByLabel: true });
   await storageAdapter.saveRosters(state.rosters);
   scheduleIndexRebuild();
 }
 
-async function applyRemoteInsights(insights){
+async function applyRemoteInsights(insights) {
   state.insights = mergeInsightsState(state.insights, insights);
-  if(storageAdapter.saveInsights){
+  if (storageAdapter.saveInsights) {
     await storageAdapter.saveInsights(state.insights);
   }
 }
 
-async function applyRemoteMeta(meta){
+async function applyRemoteMeta(meta) {
   state.meta = { ...state.meta, ...(meta || {}) };
   await storageAdapter.saveMeta(state.meta);
 }
 
-function refreshSyncEngine(){
-  if(!syncEngine){
+function refreshSyncEngine() {
+  if (!syncEngine) {
     syncEngine = createSyncEngine({
       getState: () => state,
       applyRemoteDay,
@@ -639,20 +643,20 @@ function refreshSyncEngine(){
     });
   }
   syncEngine.stop();
-  if(canSync()){
+  if (canSync()) {
     syncEngine.start();
   }
 }
 
-async function getSyncLink(){
+async function getSyncLink() {
   const creds = await getSyncCredentials();
-  if(!creds || !creds.spaceId || !creds.authToken) return "";
+  if (!creds || !creds.spaceId || !creds.authToken) return "";
   return buildSyncLink({ ...creds, endpoint: state.settings?.sync?.endpoint });
 }
 
-async function applySyncLink(link){
+async function applySyncLink(link) {
   const parsed = parseSyncLink(link);
-  if(!parsed){
+  if (!parsed) {
     return { ok: false, error: "Invalid sync link." };
   }
   const existing = await getSyncCredentials();
@@ -676,9 +680,9 @@ async function applySyncLink(link){
   return { ok: true, e2ee: !!parsed.e2ee?.enabled };
 }
 
-async function resetSyncSpace(){
+async function resetSyncSpace() {
   await clearSyncCredentials();
-  if(storageAdapter.saveOutbox){
+  if (storageAdapter.saveOutbox) {
     await storageAdapter.saveOutbox([]);
   }
   syncEngine?.clearE2eePassphrase();
@@ -687,24 +691,24 @@ async function resetSyncSpace(){
   return { ok: true };
 }
 
-async function setSyncPassphrase(passphrase){
-  if(!syncEngine) return { ok: false, error: "Sync engine not available." };
-  if(!passphrase){
+async function setSyncPassphrase(passphrase) {
+  if (!syncEngine) return { ok: false, error: "Sync engine not available." };
+  if (!passphrase) {
     return { ok: false, error: "Passphrase required." };
   }
   syncEngine.setE2eePassphrase(passphrase);
   return { ok: true };
 }
 
-async function setSyncEncryption(mode, passphrase){
+async function setSyncEncryption(mode, passphrase) {
   const encryption = (mode === "e2ee") ? "e2ee" : "none";
   const existing = await getSyncCredentials();
-  if(encryption === "e2ee" && (!existing?.spaceId || !existing?.authToken)){
+  if (encryption === "e2ee" && (!existing?.spaceId || !existing?.authToken)) {
     return { ok: false, error: "Set a sync link before enabling E2EE." };
   }
-  if(encryption === "e2ee"){
+  if (encryption === "e2ee") {
     const pass = typeof passphrase === "string" ? passphrase : "";
-    if(!pass){
+    if (!pass) {
       return { ok: false, error: "Passphrase required." };
     }
   }
@@ -721,51 +725,51 @@ async function setSyncEncryption(mode, passphrase){
       encryption
     }
   });
-  if(encryption === "e2ee"){
+  if (encryption === "e2ee") {
     syncEngine?.setE2eePassphrase(String(passphrase));
-  }else{
+  } else {
     syncEngine?.clearE2eePassphrase();
   }
   return { ok: true };
 }
 
-async function syncNow(){
-  if(!syncEngine) return;
+async function syncNow() {
+  if (!syncEngine) return;
   await syncEngine.syncNow();
 }
 
-async function listSnapshots(){
-  try{
+async function listSnapshots() {
+  try {
     return await storageAdapter.listSnapshots();
-  }catch(e){
+  } catch (e) {
     console.error("Failed to list snapshots:", e);
     return [];
   }
 }
 
-async function createSnapshot(label){
+async function createSnapshot(label) {
   const nextLabel = (typeof label === "string" && label.trim()) ? label.trim() : "Manual snapshot";
-  try{
+  try {
     const result = await saveSnapshotWithRetention({ label: nextLabel, state });
     logAudit("snapshot_create", `Snapshot "${nextLabel}" created.`, "info", { id: result?.saved?.id, label: nextLabel });
     return result?.saved || null;
-  }catch(e){
+  } catch (e) {
     console.error("Failed to create snapshot:", e);
     throw e;
   }
 }
 
-async function restoreSnapshot(snapshotId){
+async function restoreSnapshot(snapshotId) {
   await storageAdapter.restoreSnapshot(snapshotId);
   const loaded = await storageAdapter.loadState();
   integrityIssue = null;
-  if(loaded){
+  if (loaded) {
     state = finalizeLoadedState(hydrateState(loaded));
-  }else{
+  } else {
     state = finalizeLoadedState(createDefaultState());
   }
   const openError = getStorageOpenError();
-  if(openError){
+  if (openError) {
     noteIntegrityIssue("storage_open_failed", openError);
   }
   applyIntegrityStatus();
@@ -774,39 +778,39 @@ async function restoreSnapshot(snapshotId){
   logAudit("snapshot_restore", "Snapshot restored.", "info", { id: snapshotId });
 }
 
-async function deleteSnapshot(snapshotId){
-  try{
+async function deleteSnapshot(snapshotId) {
+  try {
     await storageAdapter.deleteSnapshot(snapshotId);
     logAudit("snapshot_delete", "Snapshot deleted.", "info", { id: snapshotId });
-  }catch(e){
+  } catch (e) {
     console.error("Failed to delete snapshot:", e);
     throw e;
   }
 }
 
-function logAudit(type, message, level, detail){
+function logAudit(type, message, level, detail) {
   appendAuditEvent({ type, message, level, detail }).catch((e) => {
     console.error("Audit log failed:", e);
   });
 }
 
-function logAuditEvent(type, message, level, detail){
+function logAuditEvent(type, message, level, detail) {
   logAudit(type, message, level, detail);
 }
 
-async function listAuditLog(){
-  try{
+async function listAuditLog() {
+  try {
     return await listAuditEvents();
-  }catch(e){
+  } catch (e) {
     console.error("Audit log fetch failed:", e);
     return [];
   }
 }
 
-function getDay(dateKey){
+function getDay(dateKey) {
   const existing = state.logs[dateKey];
   const base = createDefaultDay();
-  if(!existing) return base;
+  if (!existing) return base;
 
   const out = { ...base, ...existing };
 
@@ -814,33 +818,33 @@ function getDay(dateKey){
   const exSegs = (existing.segments && typeof existing.segments === "object") ? existing.segments : {};
   out.segments = { ...base.segments, ...exSegs };
 
-  for(const segId of Object.keys(base.segments)){
+  for (const segId of Object.keys(base.segments)) {
     const b = base.segments[segId];
     const e = exSegs[segId] || {};
     out.segments[segId] = { ...b, ...e };
 
     // ensure arrays
-    for(const k of ["proteins", "carbs", "fats", "micros"]){
-      if(!Array.isArray(out.segments[segId][k])) out.segments[segId][k] = [];
+    for (const k of ["proteins", "carbs", "fats", "micros"]) {
+      if (!Array.isArray(out.segments[segId][k])) out.segments[segId][k] = [];
     }
-    if(typeof out.segments[segId].status !== "string" || !out.segments[segId].status){
+    if (typeof out.segments[segId].status !== "string" || !out.segments[segId].status) {
       out.segments[segId].status = "unlogged";
     }
-    if(typeof out.segments[segId].collision === "boolean"){
+    if (typeof out.segments[segId].collision === "boolean") {
       out.segments[segId].collision = out.segments[segId].collision ? "yes" : "no";
-    }else{
+    } else {
       out.segments[segId].collision = normalizeTri(out.segments[segId].collision);
     }
-    if(typeof out.segments[segId].highFatMeal === "boolean"){
+    if (typeof out.segments[segId].highFatMeal === "boolean") {
       out.segments[segId].highFatMeal = out.segments[segId].highFatMeal ? "yes" : "no";
-    }else{
+    } else {
       out.segments[segId].highFatMeal = normalizeTri(out.segments[segId].highFatMeal);
     }
-    if(typeof out.segments[segId].seedOil !== "string") out.segments[segId].seedOil = out.segments[segId].seedOil ? String(out.segments[segId].seedOil) : "";
-    if(typeof out.segments[segId].notes !== "string") out.segments[segId].notes = out.segments[segId].notes ? String(out.segments[segId].notes) : "";
-    if(typeof out.segments[segId].tsFirst !== "string") out.segments[segId].tsFirst = out.segments[segId].tsFirst ? String(out.segments[segId].tsFirst) : "";
-    if(typeof out.segments[segId].tsLast !== "string") out.segments[segId].tsLast = out.segments[segId].tsLast ? String(out.segments[segId].tsLast) : "";
-    if(segId === "ftn" && typeof out.segments[segId].ftnMode !== "string") out.segments[segId].ftnMode = out.segments[segId].ftnMode ? String(out.segments[segId].ftnMode) : "";
+    if (typeof out.segments[segId].seedOil !== "string") out.segments[segId].seedOil = out.segments[segId].seedOil ? String(out.segments[segId].seedOil) : "";
+    if (typeof out.segments[segId].notes !== "string") out.segments[segId].notes = out.segments[segId].notes ? String(out.segments[segId].notes) : "";
+    if (typeof out.segments[segId].tsFirst !== "string") out.segments[segId].tsFirst = out.segments[segId].tsFirst ? String(out.segments[segId].tsFirst) : "";
+    if (typeof out.segments[segId].tsLast !== "string") out.segments[segId].tsLast = out.segments[segId].tsLast ? String(out.segments[segId].tsLast) : "";
+    if (segId === "ftn" && typeof out.segments[segId].ftnMode !== "string") out.segments[segId].ftnMode = out.segments[segId].ftnMode ? String(out.segments[segId].ftnMode) : "";
     ensureSegmentMeta(out.segments[segId]);
     syncSegmentStatus(out.segments[segId], segId);
   }
@@ -849,12 +853,12 @@ function getDay(dateKey){
   const supp = (out.supplements && typeof out.supplements === "object")
     ? { ...out.supplements }
     : { mode: defaultSuppMode, items: [], notes: "", tsLast: "" };
-  if(typeof supp.mode !== "string" || !supp.mode){
+  if (typeof supp.mode !== "string" || !supp.mode) {
     supp.mode = defaultSuppMode;
   }
-  if(!Array.isArray(supp.items)) supp.items = [];
-  if(typeof supp.notes !== "string") supp.notes = supp.notes ? String(supp.notes) : "";
-  if(typeof supp.tsLast !== "string") supp.tsLast = supp.tsLast ? String(supp.tsLast) : "";
+  if (!Array.isArray(supp.items)) supp.items = [];
+  if (typeof supp.notes !== "string") supp.notes = supp.notes ? String(supp.notes) : "";
+  if (typeof supp.tsLast !== "string") supp.tsLast = supp.tsLast ? String(supp.tsLast) : "";
   out.supplements = supp;
   out.highFatDay = normalizeTri(out.highFatDay);
 
@@ -862,7 +866,7 @@ function getDay(dateKey){
   return out;
 }
 
-function setDay(dateKey, day){
+function setDay(dateKey, day) {
   enqueueSync(`logs/${dateKey}`, day);
   state.logs[dateKey] = deepClone(day);
   // Fire-and-forget persistence (don't block UI)
@@ -870,29 +874,29 @@ function setDay(dateKey, day){
   scheduleIndexUpdate(dateKey);
 }
 
-function addDays(d, days){
+function addDays(d, days) {
   return addDaysLocal(d, days);
 }
 
-function dayHasSegmentData(day){
+function dayHasSegmentData(day) {
   const segments = day?.segments || {};
-  for(const [segId, seg] of Object.entries(segments)){
-    if(segmentHasContent(seg, segId)) return true;
-    if(seg?.status === "none") return true;
+  for (const [segId, seg] of Object.entries(segments)) {
+    if (segmentHasContent(seg, segId)) return true;
+    if (seg?.status === "none") return true;
   }
   return false;
 }
 
-function canCopyYesterday(dateKey){
+function canCopyYesterday(dateKey) {
   const sourceKey = dateToKey(addDaysLocal(dateFromKey(dateKey), -1));
   const source = state.logs[sourceKey];
   return !!(source && dayHasSegmentData(source));
 }
 
-function copyYesterday(dateKey){
+function copyYesterday(dateKey) {
   const sourceKey = dateToKey(addDaysLocal(dateFromKey(dateKey), -1));
   const source = state.logs[sourceKey];
-  if(!source || !dayHasSegmentData(source)) return false;
+  if (!source || !dayHasSegmentData(source)) return false;
 
   const day = getDay(dateKey);
   const nowIso = new Date().toISOString();
@@ -904,123 +908,123 @@ function copyYesterday(dateKey){
 
 // mergeSettings/createDefaultDay/segment helpers live in app/helpers.js
 
-function toggleSegmentItem(dateKey, segId, category, itemId){
+function toggleSegmentItem(dateKey, segId, category, itemId) {
   const day = getDay(dateKey);
   const seg = day.segments[segId];
-  if(!seg) return;
+  if (!seg) return;
   const nowIso = new Date().toISOString();
   toggleSegmentItemInSegment(seg, segId, category, itemId, nowIso);
-  if(canSync() && syncEngine) syncEngine.stampRecord(seg);
+  if (canSync() && syncEngine) syncEngine.stampRecord(seg);
   touchDay(day, nowIso);
   setDay(dateKey, day);
 }
 
-function setSegmentStatus(dateKey, segId, status){
+function setSegmentStatus(dateKey, segId, status) {
   const day = getDay(dateKey);
   const seg = day.segments[segId];
-  if(!seg) return;
+  if (!seg) return;
   const nowIso = new Date().toISOString();
-  if(!applySegmentStatus(seg, segId, status, nowIso)) return;
-  if(canSync() && syncEngine) syncEngine.stampRecord(seg);
+  if (!applySegmentStatus(seg, segId, status, nowIso)) return;
+  if (canSync() && syncEngine) syncEngine.stampRecord(seg);
   touchDay(day, nowIso);
   setDay(dateKey, day);
 }
 
-function setSegmentField(dateKey, segId, field, value){
-  if(field === "status"){
+function setSegmentField(dateKey, segId, field, value) {
+  if (field === "status") {
     setSegmentStatus(dateKey, segId, value);
     return;
   }
   const day = getDay(dateKey);
   const seg = day.segments[segId];
-  if(!seg) return;
-  if(seg[field] === value) return;
+  if (!seg) return;
+  if (seg[field] === value) return;
 
   seg[field] = value;
   syncSegmentStatus(seg, segId);
 
   const nowIso = new Date().toISOString();
   touchSegment(seg, nowIso);
-  if(canSync() && syncEngine) syncEngine.stampRecord(seg);
+  if (canSync() && syncEngine) syncEngine.stampRecord(seg);
   touchDay(day, nowIso);
 
   setDay(dateKey, day);
 }
 
-function clearSegment(dateKey, segId){
+function clearSegment(dateKey, segId) {
   const day = getDay(dateKey);
   const seg = day.segments[segId];
-  if(!seg) return;
-  if(!segmentHasContent(seg, segId) && seg.status === "unlogged") return;
+  if (!seg) return;
+  if (!segmentHasContent(seg, segId) && seg.status === "unlogged") return;
 
   clearSegmentContents(seg, segId);
   seg.status = "unlogged";
   const nowIso = new Date().toISOString();
   touchSegment(seg, nowIso);
-  if(canSync() && syncEngine) syncEngine.stampRecord(seg);
+  if (canSync() && syncEngine) syncEngine.stampRecord(seg);
   touchDay(day, nowIso);
 
   setDay(dateKey, day);
 }
 
-function copySegment(dateKey, targetSegId, sourceSeg){
-  if(!sourceSeg || !targetSegId) return;
+function copySegment(dateKey, targetSegId, sourceSeg) {
+  if (!sourceSeg || !targetSegId) return;
   const day = getDay(dateKey);
   const target = day.segments[targetSegId];
-  if(!target) return;
+  if (!target) return;
   const nowIso = new Date().toISOString();
   const next = copySegmentFromSource(targetSegId, target, sourceSeg, nowIso);
-  if(canSync() && syncEngine) syncEngine.stampRecord(next);
+  if (canSync() && syncEngine) syncEngine.stampRecord(next);
   day.segments[targetSegId] = next;
   touchDay(day, nowIso);
   setDay(dateKey, day);
 }
 
-function setDayField(dateKey, field, value){
+function setDayField(dateKey, field, value) {
   const day = getDay(dateKey);
-  if(day[field] === value) return;
+  if (day[field] === value) return;
   day[field] = value;
   touchDay(day);
   setDay(dateKey, day);
 }
 
-function toggleSupplementItem(dateKey, itemId){
+function toggleSupplementItem(dateKey, itemId) {
   const day = getDay(dateKey);
   const defaultMode = state?.settings?.supplementsMode || "none";
   const nowIso = new Date().toISOString();
-  if(!toggleSupplementItemInDay(day, itemId, defaultMode, nowIso)) return;
+  if (!toggleSupplementItemInDay(day, itemId, defaultMode, nowIso)) return;
   touchDay(day, nowIso);
   setDay(dateKey, day);
 }
 
-function setSupplementsNotes(dateKey, notes){
+function setSupplementsNotes(dateKey, notes) {
   const day = getDay(dateKey);
   const defaultMode = state?.settings?.supplementsMode || "none";
   const nowIso = new Date().toISOString();
-  if(!setSupplementsNotesInDay(day, notes, defaultMode, nowIso)) return;
+  if (!setSupplementsNotesInDay(day, notes, defaultMode, nowIso)) return;
   touchDay(day, nowIso);
   setDay(dateKey, day);
 }
 
-function toggleBoolField(dateKey, field){
+function toggleBoolField(dateKey, field) {
   const day = getDay(dateKey);
-  if(typeof day[field] === "string"){
+  if (typeof day[field] === "string") {
     const normalized = normalizeTri(day[field]);
-    if(normalized === "yes"){
+    if (normalized === "yes") {
       day[field] = "no";
-    }else if(normalized === "no"){
+    } else if (normalized === "no") {
       day[field] = "auto";
-    }else{
+    } else {
       day[field] = "yes";
     }
-  }else{
+  } else {
     day[field] = !day[field];
   }
   touchDay(day);
   setDay(dateKey, day);
 }
 
-function toggleTriField(dateKey, field){
+function toggleTriField(dateKey, field) {
   const day = getDay(dateKey);
   const current = normalizeTri(day[field]);
   const next = (current === "auto") ? "yes" : (current === "yes" ? "no" : "auto");
@@ -1029,12 +1033,12 @@ function toggleTriField(dateKey, field){
   setDay(dateKey, day);
 }
 
-function addRosterItem(category, item){
+function addRosterItem(category, item) {
   const name = normalizeLabel(item || "");
-  if(!name) return;
+  if (!name) return;
 
   const roster = state.rosters[category] || [];
-  if(findRosterItemByLabel(roster, name)) return;
+  if (findRosterItemByLabel(roster, name)) return;
 
   const template = findDefaultRosterTemplate(category, name);
   const entry = createRosterItem(name, { tags: template?.tags || [] });
@@ -1045,13 +1049,13 @@ function addRosterItem(category, item){
   return entry;
 }
 
-function addRosterItemWithId(category, itemId, label){
+function addRosterItemWithId(category, itemId, label) {
   const id = typeof itemId === "string" ? itemId.trim() : "";
   const name = normalizeLabel(label || "");
-  if(!id || !name) return null;
+  if (!id || !name) return null;
 
   const roster = state.rosters[category] || [];
-  if(roster.find((entry) => entry && entry.id === id)) return null;
+  if (roster.find((entry) => entry && entry.id === id)) return null;
 
   const template = findDefaultRosterTemplate(category, name);
   const entry = createRosterItem(name, { id, tags: template?.tags || [] });
@@ -1063,20 +1067,20 @@ function addRosterItemWithId(category, itemId, label){
   return entry;
 }
 
-function removeRosterItem(category, itemId){
+function removeRosterItem(category, itemId) {
   const roster = state.rosters[category] || [];
   const idx = roster.findIndex((entry) => entry && entry.id === itemId);
-  if(idx < 0) return;
+  if (idx < 0) return;
 
   roster.splice(idx, 1);
   state.rosters[category] = roster;
 
   // scrub from logs
   const nowIso = new Date().toISOString();
-  for(const dk of Object.keys(state.logs)){
+  for (const dk of Object.keys(state.logs)) {
     const day = getDay(dk);
     const dayChanged = scrubRosterItemFromDay(day, category, itemId, nowIso);
-    if(dayChanged){
+    if (dayChanged) {
       touchDay(day, nowIso);
       enqueueSync(`logs/${dk}`, day);
       state.logs[dk] = day;
@@ -1090,13 +1094,13 @@ function removeRosterItem(category, itemId){
   enqueueSync("rosters", state.rosters);
 }
 
-function updateRosterItem(category, itemId, updater){
+function updateRosterItem(category, itemId, updater) {
   const roster = state.rosters[category] || [];
   const idx = roster.findIndex((entry) => entry && entry.id === itemId);
-  if(idx < 0) return null;
+  if (idx < 0) return null;
   const current = roster[idx];
   const next = typeof updater === "function" ? updater(current) : { ...current, ...updater };
-  if(!next) return null;
+  if (!next) return null;
   roster[idx] = next;
   state.rosters[category] = roster;
   persistRosters().catch(e => console.error("Persist rosters failed:", e));
@@ -1105,34 +1109,34 @@ function updateRosterItem(category, itemId, updater){
   return next;
 }
 
-function updateRosterLabel(category, itemId, label){
+function updateRosterLabel(category, itemId, label) {
   const normalized = normalizeLabel(label || "");
-  if(!normalized) return null;
+  if (!normalized) return null;
   return updateRosterItem(category, itemId, (item) => setRosterLabel(item, normalized));
 }
 
-function updateRosterAliases(category, itemId, aliases){
+function updateRosterAliases(category, itemId, aliases) {
   return updateRosterItem(category, itemId, (item) => setRosterAliases(item, aliases));
 }
 
-function updateRosterTags(category, itemId, tags){
+function updateRosterTags(category, itemId, tags) {
   return updateRosterItem(category, itemId, (item) => setRosterTags(item, tags));
 }
 
-function updateRosterIcon(category, itemId, icon){
+function updateRosterIcon(category, itemId, icon) {
   return updateRosterItem(category, itemId, (item) => setRosterIcon(item, icon));
 }
 
-function toggleRosterPinnedAction(category, itemId){
+function toggleRosterPinnedAction(category, itemId) {
   return updateRosterItem(category, itemId, (item) => toggleRosterPinned(item));
 }
 
-function toggleRosterArchivedAction(category, itemId){
+function toggleRosterArchivedAction(category, itemId) {
   return updateRosterItem(category, itemId, (item) => toggleRosterArchived(item));
 }
 
-async function exportState(mode){
-  if(mode && typeof mode === "object" && mode.type){
+async function exportState(mode) {
+  if (mode && typeof mode === "object" && mode.type) {
     mode = undefined;
   }
   const now = new Date();
@@ -1143,18 +1147,18 @@ async function exportState(mode){
       ? false
       : !!state.settings?.privacy?.exportEncryptedByDefault;
 
-  if(useEncrypted){
+  if (useEncrypted) {
     const passphrase = prompt("Enter passphrase for encrypted export:");
-    if(!passphrase){
+    if (!passphrase) {
       alert("Encrypted export canceled (no passphrase).");
       return;
     }
     const confirmPass = prompt("Confirm passphrase:");
-    if(confirmPass !== passphrase){
+    if (confirmPass !== passphrase) {
       alert("Passphrases did not match. Export canceled.");
       return;
     }
-    try{
+    try {
       const payload = await encryptExport(state, passphrase, { exportOptions: { appVersion: APP_VERSION, now } });
       const json = JSON.stringify(payload, null, 2);
       const blob = new Blob([json], { type: "application/json" });
@@ -1164,7 +1168,7 @@ async function exportState(mode){
       a.click();
       URL.revokeObjectURL(a.href);
       return;
-    }catch(e){
+    } catch (e) {
       console.error("Encrypted export failed:", e);
       alert("Encrypted export failed. Check WebCrypto support.");
       return;
@@ -1180,7 +1184,7 @@ async function exportState(mode){
   URL.revokeObjectURL(a.href);
 }
 
-function exportCsv(){
+function exportCsv() {
   const now = new Date();
   const dateLabel = yyyyMmDd(now);
   const csv = buildCsvExport(state);
@@ -1192,28 +1196,28 @@ function exportCsv(){
   URL.revokeObjectURL(a.href);
 }
 
-async function decryptImportPayload(payload, passphrase){
-  if(!passphrase){
+async function decryptImportPayload(payload, passphrase) {
+  if (!passphrase) {
     return { ok: false, error: "Passphrase required to decrypt import." };
   }
-  try{
+  try {
     const decoded = await decryptExport(payload, passphrase);
     return { ok: true, payload: decoded };
-  }catch(e){
+  } catch (e) {
     return { ok: false, error: "Decrypt failed. Check passphrase and try again." };
   }
 }
 
-async function importState(file){
+async function importState(file) {
   const text = await file.text();
   const obj = JSON.parse(text);
   const result = await applyImportPayload(obj, "replace");
-  if(!result.ok){
+  if (!result.ok) {
     throw new Error(result.error || "Import failed.");
   }
 }
 
-function updateSettings(nextSettings){
+function updateSettings(nextSettings) {
   state.settings = mergeSettings(state.settings, nextSettings);
   updateDstClampDiagnostics();
   persistSettings().catch(e => console.error("Persist settings failed:", e));
@@ -1222,7 +1226,7 @@ function updateSettings(nextSettings){
   refreshSyncEngine();
 }
 
-function updateDstClampDiagnostics(now){
+function updateDstClampDiagnostics(now) {
   const date = now instanceof Date ? now : new Date();
   const info = inspectDstClamp(date, state.settings);
   state.meta.integrity = {
@@ -1238,15 +1242,15 @@ function updateDstClampDiagnostics(now){
   persistMeta().catch((e) => console.error("Persist meta failed:", e));
 }
 
-function noteIntegrityIssue(reason, error){
-  if(integrityIssue) return;
+function noteIntegrityIssue(reason, error) {
+  if (integrityIssue) return;
   integrityIssue = {
     reason: reason || "unknown",
     error: error instanceof Error ? error.message : String(error || "")
   };
 }
 
-function applyIntegrityStatus(){
+function applyIntegrityStatus() {
   const nowIso = new Date().toISOString();
   const safeMode = !!integrityIssue;
   state.meta.integrity = {
@@ -1254,7 +1258,7 @@ function applyIntegrityStatus(){
     safeMode,
     lastIntegrityCheckTs: nowIso
   };
-  if(safeMode && state.settings?.sync){
+  if (safeMode && state.settings?.sync) {
     state.settings.sync = {
       ...state.settings.sync,
       mode: "off"
@@ -1263,18 +1267,18 @@ function applyIntegrityStatus(){
   persistMeta().catch((e) => console.error("Persist meta failed:", e));
 }
 
-function isSafeMode(){
+function isSafeMode() {
   return !!state.meta?.integrity?.safeMode;
 }
 
 let safeModeWarned = false;
 
-function notifySafeMode(){
-  if(safeModeWarned) return;
+function notifySafeMode() {
+  if (safeModeWarned) return;
   safeModeWarned = true;
-  try{
+  try {
     alert("Safe Mode is active. Editing is disabled; use Diagnostics to export or restore a snapshot.");
-  }catch(e){
+  } catch (e) {
     // ignore alert failures in non-browser contexts
   }
 }
@@ -1301,41 +1305,41 @@ const guardActions = createSafeModeGuards({
   blockedReturn: SAFE_MODE_BLOCKED_RETURN
 });
 
-function dismissInsightAction(insight){
-  if(!insight) return;
+function dismissInsightAction(insight) {
+  if (!insight) return;
   state.insights = dismissInsight(state.insights, insight);
   persistInsights().catch(e => console.error("Persist insights failed:", e));
   enqueueSync("insights", state.insights);
 }
 
-function toggleFocusMode(){
+function toggleFocusMode() {
   state.settings.focusMode = (state.settings.focusMode === "full") ? "nowfade" : "full";
   persistSettings().catch(e => console.error("Persist settings failed:", e));
   enqueueSync("settings", state.settings);
 }
 
-function resetDay(dateKey){
+function resetDay(dateKey) {
   const day = createDefaultDay();
   setDay(dateKey, day);
 }
 
-function replaceState(nextState){
-  if(!nextState || typeof nextState !== "object") return;
+function replaceState(nextState) {
+  if (!nextState || typeof nextState !== "object") return;
   state = deepClone(nextState);
   persistAll().catch(e => console.error("Persist state failed:", e));
   scheduleIndexRebuild();
 }
 
-async function applyImportPayload(payload, mode){
+async function applyImportPayload(payload, mode) {
   const validation = validateImportPayload(payload);
-  if(!validation.ok){
+  if (!validation.ok) {
     return validation;
   }
 
-  await savePreImportSnapshot({ state }).catch(() => {});
+  await savePreImportSnapshot({ state }).catch(() => { });
 
   let next = null;
-  if(validation.version === 4){
+  if (validation.version === 4) {
     next = {
       version: 4,
       meta: payload.meta,
@@ -1344,19 +1348,19 @@ async function applyImportPayload(payload, mode){
       insights: payload.insights || createInsightsState(),
       logs: payload.logs
     };
-  }else if(payload && payload.version === 3){
+  } else if (payload && payload.version === 3) {
     next = migrateV3ToV4(payload, {
       appVersion: APP_VERSION,
       storageMode: "localStorage",
       persistStatus: "unknown"
     });
-  }else{
+  } else {
     next = migrateFromLegacy(payload);
   }
-  if(next){
+  if (next) {
     next.settings = mergeSettings(DEFAULT_SETTINGS, next.settings || {});
   }
-  if(mode === "replace"){
+  if (mode === "replace") {
     next.insights = mergeInsightsState(createInsightsState(), next.insights);
     state = next;
     await persistAll();
@@ -1465,7 +1469,7 @@ ui = createLegacyUI({
     ui.init();
     wireFlushEvents();
     logAudit("boot", "App booted.");
-  } catch(e) {
+  } catch (e) {
     console.error("Boot failed:", e);
     // Fall back to default state and init UI anyway
     ui.init();
@@ -1474,15 +1478,15 @@ ui = createLegacyUI({
   }
 })();
 
-function wireFlushEvents(){
-  if(typeof window === "undefined" || typeof document === "undefined") return;
+function wireFlushEvents() {
+  if (typeof window === "undefined" || typeof document === "undefined") return;
   const flush = () => {
-    if(isSafeMode()) return;
+    if (isSafeMode()) return;
     persistAll().catch((e) => console.error("Flush persist failed:", e));
   };
   window.addEventListener("pagehide", flush);
   document.addEventListener("visibilitychange", () => {
-    if(document.visibilityState === "hidden"){
+    if (document.visibilityState === "hidden") {
       flush();
     }
   });
