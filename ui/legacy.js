@@ -1010,6 +1010,23 @@ export function createLegacyUI(ctx) {
     const sync = state?.meta?.sync || {};
     const mode = state?.settings?.sync?.mode || "hosted";
     renderSyncStatusComponent({ els, sync, mode });
+    if (els.syncStatusLine) {
+      let label = "—";
+      if (mode === "off") {
+        label = "Paused";
+      } else if (sync.status === "syncing") {
+        label = "Syncing";
+      } else if (sync.status === "idle" || sync.status === "") {
+        label = "Idle";
+      } else if (sync.status === "error") {
+        label = "Error";
+      } else if (sync.status === "offline") {
+        label = "Offline";
+      }
+      const pending = Number.isFinite(sync.pendingOutbox) ? sync.pendingOutbox : 0;
+      const suffix = pending > 0 ? ` • ${pending} pending` : "";
+      els.syncStatusLine.textContent = `Status: ${label}${suffix}`;
+    }
   }
 
   function renderHistory() {
