@@ -2144,8 +2144,11 @@ export function createLegacyUI(ctx) {
     appLocked = isAppLockEnabled() && hasAppLockSecret() && canUseCrypto();
     setActiveTab("today");
     // [SB-06] Immediately render time to avoid --:-- flash
-    renderCurrentTime(yyyyMmDd(getCurrentDate()));
+    const dateKey = yyyyMmDd(getCurrentDate());
+    renderCurrentTime(dateKey);
     renderAll();
+    renderSolarArc(dateKey);
+    applyFutureFog(dateKey);
     refreshAppLock();
     startTicks();
   }

@@ -211,17 +211,18 @@ export function renderSolarArc({
   const sunsetClamp = clampLocalTime(date, parseTimeToMinutes(state.settings.sunset));
   const sunriseMin = sunriseClamp.minutes;
   const sunsetMin = sunsetClamp.minutes;
-  const sunriseLifted = liftMinuteToTimeline(sunriseMin, start);
-  const sunsetLifted = liftMinuteToTimeline(sunsetMin, start);
-  const sunriseClamped = clamp(sunriseLifted, start, end);
-  const sunsetClamped = clamp(sunsetLifted, start, end);
+  const wraps = end > 1440;
+  const sunriseOnTimeline = wraps ? liftMinuteToTimeline(sunriseMin, start) : sunriseMin;
+  const sunsetOnTimeline = wraps ? liftMinuteToTimeline(sunsetMin, start) : sunsetMin;
+  const sunriseClamped = clamp(sunriseOnTimeline, start, end);
+  const sunsetClamped = clamp(sunsetOnTimeline, start, end);
 
   const W = 1000;
   const yBase = 210;
   const yPeak = 50;
 
-  const xSunrise = ((sunriseLifted - start) / span) * W;
-  const xSunset = ((sunsetLifted - start) / span) * W;
+  const xSunrise = ((sunriseClamped - start) / span) * W;
+  const xSunset = ((sunsetClamped - start) / span) * W;
 
   const path = computeArcPath(xSunrise, xSunset, yBase, yPeak);
   els.sunArc.setAttribute("d", path);
@@ -237,8 +238,8 @@ export function renderSolarArc({
   let sunY = yBase;
   let showSun = false;
 
-  if (sunsetLifted > sunriseLifted && tMinLifted >= sunriseLifted && tMinLifted <= sunsetLifted) {
-    const t = clamp((tMinLifted - sunriseLifted) / (sunsetLifted - sunriseLifted), 0, 1);
+  if (sunsetClamped > sunriseClamped && tMinLifted >= sunriseClamped && tMinLifted <= sunsetClamped) {
+    const t = clamp((tMinLifted - sunriseClamped) / (sunsetClamped - sunriseClamped), 0, 1);
     const p = cubicPoint(xSunrise, xSunset, yBase, yPeak, t);
     sunX = p.x;
     sunY = p.y;
