@@ -137,6 +137,10 @@ body {
   background: rgba(255, 255, 255, .18);
 }
 
+.hidden {
+  display: none !important;
+}
+
 .privacy-blur {
   position: fixed;
   inset: 0;
