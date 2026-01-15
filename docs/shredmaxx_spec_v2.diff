@@ -1,0 +1,731 @@
+diff --git a/README.md b/README.md
+index 60612ad..7d27441 100644
+--- a/README.md
++++ b/README.md
+@@ -1,10 +1,10 @@
+ # Shredmaxx — Solar Log v4 (PWA)
+ 
+-Local‑first tracker for the Shredmaxxing protocol with a segmented day model (FTN → Lunch → Dinner → Late). v4 focuses on ultra‑fast logging, durable storage, and explainable insights — all without a backend or build chain.
++Hosted‑sync‑first tracker for the Shredmaxxing protocol with a segmented day model (FTN → Lunch → Dinner → Late). v4 focuses on ultra‑fast logging, durable replication, and explainable insights — with an **offline‑first cache** and no front‑end build chain.
+ 
+ ## Status
+ - **Spec**: `Solar Log v4 Implementation.md` (source of truth).
+-- **Implementation**: the PWA (`index.html`, `app.js`, `style.css`) remains a **v3 UI baseline** with **v4 core logic and storage** wired in (protocol day model, IndexedDB‑first persistence, roster IDs/tags, merge+snapshots, review/insights, privacy features).
++- **Implementation**: the PWA (`index.html`, `app.js`, `style.css`) remains a **v3 UI baseline** with **v4 core logic** wired in (protocol day model, roster IDs/tags, merge+snapshots, review/insights, privacy features, and **hosted sync by default with an IndexedDB cache**).
+ 
+ ## What v4 tracks (fast)
+ - **FTN mode**: strict / lite / off (FTN segment only)
+@@ -26,12 +26,19 @@ Local‑first tracker for the Shredmaxxing protocol with a segmented day model (
+ - Solar arc clamps inside the protocol day for stable rendering.
+ 
+ ## Data, privacy, and portability (v4)
+-- **IndexedDB‑first** persistence with **localStorage** fallback.
++- **Hosted sync (same-origin)** is the default durability layer (multi-device convergence).
++- **IndexedDB** is still used as an **offline-first cache** (UI reads/writes it first); `localStorage` remains a legacy fallback.
+ - Attempts **persistent storage** when supported (see Diagnostics).
+-- **Snapshots** before import/migration; restore from Diagnostics.
++- **Outbox replication**: offline edits queue and sync when back online (never blocks logging).
++- **Snapshots** before import/migration/sync-reset; restore from Diagnostics.
+ - **Merge‑safe import** (default) + **Replace** option.
+-- Exports: **JSON**, **encrypted JSON** (AES‑GCM via WebCrypto), and **CSV** (per‑day rows).
+-- Optional hardening: **app lock**, **privacy blur**, **home redaction**. Encrypted exports can be imported with a passphrase.
++- Exports: **JSON** (sanitized, no sync credentials), **encrypted JSON** (AES‑GCM via WebCrypto), and **CSV** (per‑day rows).
++- Optional hardening: **app lock**, **privacy blur**, **home redaction**. Optional **E2EE** makes hosted sync ciphertext-only.
++
++## Hosted Sync (default)
++- When deployed with a write-capable same-origin server, the app syncs to `/api/sync/v1/*` in the background.
++- The UI always renders from the local cache first, so logging is instant and works offline.
++- If the sync API is unavailable (e.g., static hosting / `python -m http.server`), the app falls back to local-only mode and continues to work.
+ 
+ ## Review (v4)
+ - Weekly Review 2.0: coverage matrix, rotation picks, and local‑only correlations.
+@@ -83,13 +90,14 @@ node scripts/run-e2e.mjs
+ See `docs/testing-e2e-tooling.md` for setup and artifact locations.
+ 
+ ## Manual QA checklist (v4)
+-- Storage: add a segment, reload, confirm data persists; verify Diagnostics shows storage mode + persist status.
++- Storage: add a segment, reload, confirm data persists; verify Diagnostics shows storage mode + persist status + sync status.
+ - Snapshots: create a snapshot, restore it, then delete it; confirm Diagnostics updates snapshot count.
+ - Import/export: export JSON, import as merge, then import as replace; verify logs/rosters expected. Export encrypted, then import with passphrase.
+ - CSV export: export CSV and open in a spreadsheet; verify per‑day rows render.
+ - Copy yesterday: use “Copy yesterday” with a segment list and with “all”; verify overwrite confirm and undo.
+ - Review: ensure weekly summary, issue chips, correlations, matrix, and rotation picks render.
+ - Privacy: app lock works, blur on background works, home redaction hides labels.
++- Hosted sync: make an offline edit, then go online; verify outbox drains and sync status returns to idle.
+ - Update flow: with service worker enabled, confirm update toast appears on new SW version.
+ 
+ ## Files (current prototype)
+diff --git a/Solar Log v4 Implementation.md b/Solar Log v4 Implementation.md
+index 84429b7..e3ff0ef 100644
+--- a/Solar Log v4 Implementation.md
++++ b/Solar Log v4 Implementation.md
+@@ -1,10 +1,10 @@
+ ## Solar Log v4 Implementation Plan Spec
+ 
+ **Project codename:** **Solar Log**
+-**Primary goal:** ultra-fast adherence + food-variety tracking for a segmented-day protocol (**FTN → Lunch → Dinner → Late**) with minimal friction, **local-first** privacy, and a UI that makes logging feel like “tapping a ritual” instead of “doing admin.”
++**Primary goal:** ultra-fast adherence + food-variety tracking for a segmented-day protocol (**FTN → Lunch → Dinner → Late**) with minimal friction, **hosted sync (same-origin)** durability, and an **offline-first local cache** so logging stays instant offline or online.
+ 
+-**v4 thesis:** keep the v3 feel, but harden the system with **robust time semantics**, **durable storage**, **stable roster identity**, and **explainable insights**—without introducing infra or a build chain.
++**v4 thesis:** keep the v3 feel, but harden the system with **robust time semantics**, **hosted sync (same-origin)** persistence, an **offline-first cache** for speed, **stable roster identity**, and **explainable insights**—still no build chain.
+ 
+ ---
+ 
+@@ -14,7 +14,8 @@
+ ### v4 upgrades (high impact, low bloat)
+ 
+ * **Time model** becomes a formal **protocol day** anchored to `dayStart`, supporting wrap-around (`dayEnd <= dayStart`) with correct **active day** selection after midnight.
+-* Persistence becomes **IndexedDB-first** with a fallback, plus **pre-import/pre-migration snapshots** and **merge-safe import**.
++* Persistence becomes **hosted sync by default** (same-origin) with an **IndexedDB offline cache** + fallback, a persistent **outbox**, plus **pre-import/pre-migration snapshots** and **merge-safe import**.
++* Multi-device durability: incremental **pull/merge/push** replication with **Hybrid Logical Clocks (HLC)**, **ETag/If-Match** optimistic concurrency, and batched uploads (never blocks logging).
+ * Rosters become **ID-based** with metadata: **stable IDs**, **tags**, **aliases**, **pinned**, **archived**.
+ * Meal-level “fuzzy” concepts become **computed + override**: **high-fat meal** and optional **collision auto-suggestion** (conservative).
+ * Weekly Review becomes a real behavior loop: **coverage matrix**, **rotation picks**, and simple local-only **correlations**.
+@@ -62,15 +63,16 @@ Every log action must be doable in **≤ 10 seconds**:
+ * Remove fear: **Undo** makes logging safe.
+ * Avoid modal complexity: keep flows tap-first, not form-first.
+ 
+-### 1.4 Privacy posture (local-first, optional hardening)
++### 1.4 Privacy posture (hosted-by-default, optional hardening)
+ 
+-Default remains frictionless. Data stays on-device unless the user exports. The app will never require an account.
++Default remains frictionless. The app uses **hosted sync (same-origin)** by default for durability, but always reads/writes the **local cache** first so it stays fast and fully functional offline.
+ 
+ Optional hardening (off-by-default):
+ 
+ * **App lock** (simple passcode)
+ * **Privacy blur** when backgrounded/task-switched
+ * **Encrypted export** using **WebCrypto AES-GCM**
++* Optional sync privacy: enable **E2EE** so the server stores **ciphertext only** (client encrypts; server never sees plaintext)
+ 
+ ---
+ 
+@@ -219,6 +221,13 @@ For Settings:
+ * Home redaction: counts-only (hide labels + notes on Home)
+ * Export default: JSON / Encrypted JSON
+ 
++**Sync (default: hosted)**
++
++* Status: **Idle / Syncing / Offline / Error**
++* Actions: **Sync now**, **Copy Sync Link**, **Paste Sync Link**, **Reset sync space**
++* Optional: enable **E2EE** (passphrase) so the server stores ciphertext only
++* Advanced: pause sync, endpoint override (dev)
++
+ **Diagnostics**
+ 
+ * storage mode (IndexedDB vs fallback)
+@@ -234,19 +243,23 @@ For Diagnostics:
+ 
+ ### 4.1 Storage strategy
+ 
+-Local-first:
++**Hosted sync by default** (same-origin) with an **offline-first local cache**:
+ 
+-* **IndexedDB** primary. fallback to localStorage.
+-* Keep state normalized and always write through adapter.
+-* Try to request persistent storage (`navigator.storage.persist()`), surface status in Diagnostics.
+-* Store one day per key: `logs[DateKey]`
+-* Create snapshots (ring buffer / retention) before migrations and imports.
++* **Remote store (same-origin)**: durability anchor + multi-device convergence. Used to bootstrap new devices and recover after cache loss.
++* **IndexedDB** (local cache): primary read/write path for UI responsiveness and offline operation. Holds a persistent **outbox** for queued uploads.
++* fallback: localStorage (legacy/compat only; limited offline cache)
++
++**Durability + offline**
++
++* Local writes always commit to the cache first (the **≤10s** rule stays intact).
++* A background replicator drains the outbox to the server with retry (**exponential backoff + jitter**). Failures never block logging.
++* Attempt **persistent storage** (`navigator.storage.persist()`); surface result in Diagnostics.
++* Create automatic **pre-import** and **pre-migration snapshots** (ring buffer, keep last 7).
++* Create a **pre-sync snapshot** before applying large remote pulls or destructive sync resets.
+ 
+ ### 4.2 Canonical schema (v4)
+ 
+ ```ts
+ // Canonical, zero-padded for sorting + stable exports: YYYY-MM-DD
+ type DateKey = `${number}-${string}-${string}`;
+ 
+ type SegmentId = "ftn" | "lunch" | "dinner" | "late";
+ 
+ type SeedOil = "" | "none" | "yes";
+ type FtnMode = "" | "ftn" | "lite" | "off";
+ 
+ // Computed + override tri-state. "" treated as "auto" for legacy compatibility.
+ type Tri = "" | "auto" | "yes" | "no";
+ 
+ type SegmentStatus = "" | "unlogged" | "none" | "logged";
+ type Signal = "" | "1" | "2" | "3" | "4" | "5";
+ 
++// Monotonic merge clock for cross-device ordering.
++// Format: "<unix_ms>:<counter>:<actor>"
++type Hlc = string;
++type ActorId = string;          // stable per-install identifier (Meta.installId)
++
++// Hosted sync (same-origin). "" treated as default for legacy compatibility.
++type SyncMode = "" | "hosted" | "off";
++type SyncStatus = "" | "idle" | "syncing" | "offline" | "error";
++type SyncEncryption = "" | "none" | "e2ee";
++
+ type ItemId = string;   // uuid (stable identity)
+ type ItemTag = string;  // e.g. "carb:starch", "carb:fruit", "fat:seed_oil"
+ 
+@@ -284,6 +297,9 @@ interface SegmentLog {
+ 
+   tsFirst?: string;      // set on first user touch (wall-clock; UX only)
+   tsLast?: string;       // set on edits (wall-clock; UX only)
++
++  hlc?: Hlc;             // merge clock (monotonic across devices)
++  actor?: ActorId;       // last writer (tie-break + diagnostics)
+ 
+   rev: number;           // monotonic per-segment revision
+ }
+@@ -314,6 +330,9 @@ interface DayLog {
+   notes: string;
+ 
+   tsCreated: string;
+   tsLast: string;
++
++  hlc?: Hlc;             // merge clock (monotonic across devices)
++  actor?: ActorId;       // last writer (tie-break + diagnostics)
+ 
+   rev: number;           // monotonic per-day revision
+ }
+@@ -346,6 +365,17 @@ interface Settings {
+   // Guidance only
+   phase: "" | "strict" | "maintenance" | "advanced";
+ 
++  // Hosted sync (default). Secrets (auth token / passphrase) are stored outside TrackerState.
++  sync: {
++    mode: SyncMode;          // default "hosted"
++    endpoint: string;        // e.g. "/api/sync/v1" (same-origin by default)
++    spaceId?: string;        // opaque namespace id (share via Sync Link)
++    encryption: SyncEncryption; // default "none"; "e2ee" requires passphrase entry
++    pushDebounceMs: number;  // coalesce writes (default ~1500ms)
++    pullOnBoot: boolean;     // default true
++  };
++
+   // Optional privacy hardening
+   privacy: {
+     appLock: boolean;
+@@ -363,14 +393,30 @@ interface Rosters {
+   supplements?: RosterItem[]; // optional module
+ }
+ 
++interface InsightsState {
++  // UI/rules-engine state only (e.g., dismissals). Keeps insights non-naggy across reloads/devices.
++  dismissed: Record<string, string>; // insightKey -> dismissedAt ISO
++  tsLast?: string;
++}
++
+ interface Snapshot {
+   id: string;            // uuid
+   ts: string;            // ISO
+-  label: string;         // "Pre-import", "Pre-migration", "Manual"
++  label: string;         // "Pre-import", "Pre-migration", "Pre-sync", "Manual"
+   payload: string;       // serialized export (plain JSON) for restore
+ }
+ 
+ interface Meta {
+   version: 4;
+ 
+-  installId: string;
++  installId: ActorId;    // stable per-install identifier
+   appVersion?: string;   // optional build/version string
+ 
+   storageMode: "idb" | "localStorage";
+   persistStatus: "" | "unknown" | "granted" | "denied";
+ 
++  // Non-secret sync status (safe to export).
++  sync?: {
++    mode: SyncMode;
++    status: SyncStatus;
++    lastSyncTs?: string;     // ISO
++    lastError?: string;      // human-readable
++    lastPullHlc?: Hlc;
++    lastPushHlc?: Hlc;
++    pendingOutbox?: number;  // queued ops count
++  };
++
+   lastSnapshotTs?: string;
+ }
+ 
+@@ -381,13 +427,18 @@ interface TrackerState {
+ 
+   settings: Settings;
+   rosters: Rosters;
+ 
++  insights: InsightsState;
++
+   logs: Record<DateKey, DayLog>;
+ }
+ ```
+ 
++**Note:** hosted sync credentials (e.g. bearer token) and any E2EE passphrase are stored outside `TrackerState` and must be excluded from plain JSON exports.
++
+ ### 4.3 Migration strategy (v1/v2/v3 → v4)
+ 
+ **Key requirement:** preserve interpretability and minimize user-visible surprises.
+@@ -425,14 +476,22 @@ Implement a small **StorageAdapter** API (no build chain):
+ * `saveDay(dateKey, dayLog): Promise<void>` (primary write path)
+ * `saveSettings(settings): Promise<void>`
+ * `saveRosters(rosters): Promise<void>`
++* `saveInsights(insights): Promise<void>`
+ * `listSnapshots(): Promise<Snapshot[]>`
+ * `saveSnapshot(snapshot): Promise<void>`
+ * `restoreSnapshot(snapshotId): Promise<void>`
++* `deleteSnapshot(snapshotId): Promise<void>`
+ 
+ **IndexedDB layout (recommended)**
+ 
+ * `meta` store (single)
+ * `settings` store (single)
++* `sync_credentials` store (single; **not exported**) — bearer token / space join info
+ * `rosters` store (single)
++* `insights` store (single)
+ * `logs` store keyed by `DateKey`
+ * `snapshots` store keyed by `Snapshot.id`
++* `outbox` store (queued remote ops; coalesced by key)
+ 
+ ### 5.2 Import
+ 
+@@ -459,7 +518,7 @@ Import must be **validated**, **non-destructive**, and **merge-aware**.
+ 
+ * Per-day merge: union logs by `DateKey`
+ * Per-segment resolution:
+ 
+-  * choose higher `(rev, tsLast)` as winner
++  * prefer higher `hlc` when present; fallback to `(rev, tsLast)` for legacy
+   * if both touched and disjoint selections, optionally union arrays (configurable; default: winner-takes-segment)
+ * Roster merge:
+ 
+@@ -474,6 +533,7 @@ Import must be **validated**, **non-destructive**, and **merge-aware**.
+ **Plain JSON export**
+ 
+ * `TrackerState` + `exportedAt` + `appVersion`
++* Does **not** include sync credentials (bearer tokens) or any E2EE passphrase
+ 
+ **Encrypted export (optional)**
+ 
+@@ -490,6 +550,121 @@ Import must be **validated**, **non-destructive**, and **merge-aware**.
+   * per-segment item labels delimited (e.g., `|`)
+   * computed effective flags (collision/high-fat meal)
+ 
++### 5.4 Hosted sync (default, same-origin)
++
++Hosted sync is the **default** persistence mode. The app is **offline-first** by design: it renders from the local cache immediately, then converges with the server in the background.
++
++#### 5.4.1 Sync Space + credentials
++
++A Sync Space scopes data on the server:
++
++* `spaceId` — opaque namespace id (shareable)
++* `authToken` — high-entropy bearer credential (**stored locally only; never exported**)
++
++On first run, the app creates (or lazily allocates) a Sync Space automatically. To join another device, the user pastes a **Sync Link** (contains `spaceId` + `authToken`, and optionally an E2EE hint).
++
++#### 5.4.2 Remote data model (incremental, partition-aligned)
++
++Remote storage mirrors the local partitions for efficiency:
++
++* `meta`
++* `settings`
++* `rosters`
++* `insights`
++* `logs/<DateKey>`
++* `snapshots/<id>` (optional)
++
++Avoid a full-state blob as the primary sync primitive; it scales poorly as history grows.
++
++#### 5.4.3 API semantics (v1, same-origin)
++
++* `GET /api/sync/v1/index` → manifest `{ serverHlc, items: [{ key, hlc, etag, size }] }`
++* `GET /api/sync/v1/item/:key` → value (with `ETag`)
++* `PUT /api/sync/v1/item/:key` → upsert with `If-Match` (optimistic concurrency)
++* `POST /api/sync/v1/batch` → batch upsert (preferred for performance)
++* Optional: `POST /api/sync/v1/create` → returns `{ spaceId, authToken }`
++
++Correctness requirements:
++
++* All `/api/sync/*` responses set `Cache-Control: no-store`.
++* Writes accept an `Idempotency-Key` to make retries safe.
++
++#### 5.4.4 Sync algorithm (fast UI, durable replication)
++
++**Hot path (always fast):**
++
++1. Write changes to the local cache (IndexedDB).
++2. Stamp updates with `hlc` + `actor` and bump `rev`.
++3. Enqueue an outbox op keyed by record key (coalesce latest-wins).
++4. Schedule a debounced push (never block the UI).
++
++**On boot (and periodically when online):**
++
++1. Load cached state and render immediately.
++2. Pull `index` and fetch only changed keys (by `hlc`/etag).
++3. Merge remote into local using merge rules below.
++4. Persist merged local state.
++5. Drain outbox with batching and retry.
++
++Reliability:
++
++* persistent outbox
++* **exponential backoff + jitter**
++* single-tab leadership via `BroadcastChannel` (avoid races across tabs)
++
++Offline behavior:
++
++* If offline, the app remains fully usable (cache + outbox grows).
++* When connectivity returns, the outbox drains and devices converge.
++
++#### 5.4.5 Merge rules (hosted sync)
++
++Ordering is `hlc`-first:
++
++* Prefer the record with the greater `hlc`.
++* If `hlc` is missing (legacy), fall back to `(rev, tsLast)`.
++* If still tied, compare `actor` lexicographically.
++
++#### 5.4.6 Optional E2EE for hosted sync
++
++If enabled, encrypt payloads client-side before upload:
++
++* **AES-GCM** for encryption, **PBKDF2** for passphrase-derived keys (re-use encrypted export code).
++* Store only ciphertext + params on the server.
++* (Hardening) bind ciphertext to `{spaceId, key}` using AEAD associated data to prevent record swapping.
++
++E2EE is optional because it adds key-management UX; if enabled, the server becomes a blind store.
++
+ ---
+ 
+ ## 6) Reference architecture (no framework)
+@@ -556,7 +731,7 @@ Minimal stack:
+ * Rendering: vanilla JS templates + event delegation
+ * State: tiny reducer + action functions
+ * Styling: CSS variables + small component classes
+-* Storage: **IndexedDB** primary + fallback
++* Storage: **hosted sync (same-origin)** + **IndexedDB** cache + fallback
+ * PWA: `sw.js` app-shell cache
+ * Crypto: WebCrypto (`crypto.subtle`) for encrypted exports
+ 
+@@ -565,6 +740,7 @@ Service worker strategy:
+ * Cache app shell + fonts/icons
+ * Use cache-first for static assets, network-first for HTML
+ * Explicit update flow (toast + reload)
+ * Never silently break offline
++* Do not cache `/api/*` (especially `/api/sync/*`): use **network-only** + `cache: "no-store"`
+ 
+ ---
+ 
+@@ -741,7 +917,7 @@ 1. `requestPersist()` (attempt to upgrade to persistent storage)
+ ### 12.2 v4 implementation backlog (prioritized)
+ 
+ **P0 — correctness + durability**
+ 
+-1. Protocol day time model (wrap-around + activeDay + DST clamp policy)
+-2. IndexedDB-first adapter + fallback + meta diagnostics
+-3. Roster IDs + tags migration (v3 strings → v4 items)
+-4. Import merge + snapshots (pre-import/pre-migration restore)
+-5. Weekly Review 2.0 (coverage matrix + rotation picks)
++1. **Protocol day time model** (wrap-around + activeDay + DST clamp policy)
++2. **Hosted sync (same-origin) default** + offline cache + outbox + Diagnostics
++3. **Roster IDs + tags** migration (v3 strings → v4 items)
++4. **Import merge + snapshots** (pre-import/pre-migration/pre-sync restore)
++5. **Weekly Review 2.0** (coverage matrix + rotation picks)
+ 
+ **P1 — speed + delight**
+ 
+@@ -756,7 +932,7 @@ 10. Encrypted export (WebCrypto AES-GCM)
+ 11. CSV export
+ 12. App lock + privacy blur + home redaction
+ 
+ **P3 — optional future**
+-13. Opt-in cloud sync (Supabase/Worker) using per-day rows and segment `rev/tsLast` merge
++13. Multi-space support (multiple Sync Spaces), server-side snapshot retention, and optional third-party storage targets
+ 
+ ---
+ 
+@@ -809,6 +985,13 @@ 12. App lock + privacy blur + home redaction
+ * [ ] Merge preserves data; replace requires explicit confirmation
+ * [ ] Snapshot restore is one-tap and reliable
+ 
++### Sync (hosted default)
++
++* [ ] App renders from cache immediately; sync never blocks logging
++* [ ] Offline edits queue and later replicate (outbox drains on reconnect)
++* [ ] Two devices converge after pull/merge/push (no data loss)
++* [ ] Conflicts resolve deterministically via `hlc` (fallback `(rev, tsLast)`)
+ 
+ ### PWA reliability
+ 
+@@ -816,7 +999,7 @@ 12. App lock + privacy blur + home redaction
+ * [ ] Offline app-shell loads reliably after install
+ * [ ] Update flow is user-visible and non-destructive
+-* [ ] Diagnostics shows storage mode + persist status + schema/app version
++* [ ] Diagnostics shows storage mode + persist status + **sync status** + schema/app version
+ 
+ ### UX friction
+ 
+diff --git a/hosted-storage-plan.md b/hosted-storage-plan.md
+index 602333f..6d39995 100644
+--- a/hosted-storage-plan.md
++++ b/hosted-storage-plan.md
+@@ -9,59 +9,13 @@ You asked for persistence "where the app is hosted" (server-side), not device o
+ - Analyzes feasibility and tradeoffs.
+ - Proposes implementation options and a recommended path.
+ 
+-## Important constraint conflict
+-Your current v4 spec and implementation are explicitly **local-first**:
+-- IndexedDB is the primary store and works offline.
+-- localStorage fallback exists.
+-- Encrypted export is optional.
+-- There is no backend, no account system, no server state.
+-
+-But your new request is:
+-- Store everything "where the app is hosted" (server-side).
+-- Make it durable and sync across devices.
+-
+-Those constraints directly conflict:
+-- If you store state on a server, the app is no longer local-first.
+-- Offline-first behavior becomes non-trivial unless you keep a local cache.
+-- Cross-device requires identity, auth, and merge semantics.
+-
+-So there are only two coherent interpretations:
+-
+-### Interpretation A: Server is the primary store (no offline)
+-App is basically a web client to a server database.
+-Pros: simplest sync
+-Cons: not offline, latency impacts logging, needs auth/accounts
+-
+-### Interpretation B: Local cache + server sync (hybrid)
+-App remains offline-first locally, but syncs to server when online.
+-Pros: preserves speed/offline, adds durability + multi-device
+-Cons: more engineering (conflict resolution, sync loop)
+-
+-**Recommendation:** Interpretation B.
+-
+-**Next step needed:** confirm whether offline-first still matters to you.
+-
+----
+-
++## Spec alignment (resolved)
++
++The v4 spec is now explicitly updated to make **hosted sync (same-origin) the default**, while retaining **IndexedDB as an offline-first cache** for speed and offline operation. This doc assumes that new posture.
++
+ ## Current storage architecture (execution flow + functions)
+ 
+ ### Boot sequence and state hydration
+@@ -135,14 +89,14 @@ Given the goals (multi-device persistence with minimal friction), **Option B** i
+ 1) Add hosted adapter as a **sync target**, not as a replacement.
+ 2) Keep IDB as the local cache; sync in the background.
+-3) Make remote storage explicit and opt-in (since this breaks the current invariants).
++3) Make hosted sync the default when the sync API is available; fall back to local-only when it is not (dev/static hosting).
+ 
+ ## Design options (with tradeoffs)
+ 
+ ### Option A: Server-authoritative storage (no local persistence)
+ **What it is:** the app reads/writes directly to the server; no IDB/localStorage retention.
+@@ -163,7 +117,7 @@ Given the goals (multi-device persistence with minimal friction), **Option B** i
+ - Compatible with existing local-first UX.
+ - Supports cross-device, durable persistence.
+ 
+-### Option B (recommended): Hosted sync + local cache
++### Option B (default): Hosted sync + local cache
+ **What it is:** keep IndexedDB as local cache + queue, sync to server in background.
+ 
+ **Pros**
+@@ -188,14 +142,14 @@ Given the goals (multi-device persistence with minimal friction), **Option B** i
+ 
+ Given the goals (multi-device persistence with minimal friction), **Option B** is the most practical. It is also easiest to build incrementally:
+ 1) Add hosted adapter as a **sync target**, not as a replacement.
+ 2) Keep IDB as the local cache; sync in the background.
+-3) Make remote storage explicit and opt-in (since this breaks the current invariants).
++3) Make hosted sync the default when the API exists, but keep a clean local-only fallback (static hosting/dev).
+ 
+ ## Proposed hosted storage design
+ 
+ ### 1) Server-side data model
+@@ -215,7 +169,7 @@ A hosted store can store either:
+ - **Incremental records**: store settings/rosters/insights + per-day logs as separate rows/objects.
+ 
+-**Recommendation:** Start with **full-state blob** for MVP, then upgrade to incremental once stable.
++**Recommendation:** implement the **incremental store** from day 1; full-state blobs become slow and conflict-prone as history grows.
+ 
+ **Why incremental is better long-term**
+ - Allows partial fetch/update.
+@@ -236,7 +190,7 @@ You need a way to separate users/spaces:
+ 
+ **Recommendation:** Use a **space ID** + shared secret (passphrase or token).
+ - If you want zero accounts: passphrase-only access.
+-- If you want better UX: create device token + allow sharing a "sync link".
++**Recommendation:** use a **Sync Space** (`spaceId`) + high-entropy **bearer auth token**. Optional passphrase enables **E2EE** (ciphertext-only server).
+ 
+ ### 3) Durability + performance considerations
+ - Server should store writes transactionally.
+@@ -247,7 +201,7 @@ You need background sync that never blocks the UI:
+ - Local writes always go to IDB immediately.
+ - Remote writes happen async and can be retried.
+ 
+-### 4) Encryption (strongly recommended)
+-If data lives on a server, encrypt before uploading:
++### 4) Encryption (optional but recommended)
++If data lives on a server and you want a ciphertext-only server, encrypt before uploading:
+ - Use AES-GCM with PBKDF2-derived key from passphrase.
+ - Reuse `storage/encrypted_export.js` logic.
+ - Store ciphertext blob on server.
+@@ -256,10 +210,12 @@ If data lives on a server, encrypt before uploading:
+ 
+ ### 5) Sync / merge strategy
+ Leverage existing merge logic:
++- Use **Hybrid Logical Clocks (HLC)** + **ETag/If-Match** concurrency and keep a persistent **outbox** so logging never blocks.
+ 
+ - Per-day merge uses `mergeDay` with `(rev, tsLast)`.
+ - Roster merge uses IDs, with optional dedupe by label.
+ - Insights merge is already implemented (`mergeInsightsState`).
++- Per-day merge prefers `hlc` when present; fall back to `(rev, tsLast)` for legacy logs.
+ 
+ **Sync algorithm (hybrid):**
+ 1) On boot: load local state, then fetch remote.
+@@ -270,7 +226,7 @@ Leverage existing merge logic:
+ 
+ **Conflict resolution:**
+ - Treat remote and local as peers; merge both using v4 merge rules.
+-- Keep `rev` and `tsLast` monotonic on updates.
++- Keep `hlc` monotonic on updates (and keep `rev/tsLast` monotonic for legacy/fallback).
+ 
+ ### 6) Changes to storage adapter
+ Introduce `remoteAdapter` with the same interface:
+@@ -278,19 +234,20 @@ Introduce `remoteAdapter` with the same interface:
+ - `loadState`, `saveDay`, `saveSettings`, `saveRosters`, `saveInsights`, `saveMeta`, `listSnapshots`, `saveSnapshot`, `deleteSnapshot`, `restoreSnapshot`.
+ 
+-Then add a new **SyncAdapter** that wraps local + remote:
++Then add a **SyncAdapter** (default) that wraps local + remote:
+ - Local writes remain immediate.
++- Sync credentials (bearer token) live in a `sync_credentials` store and are excluded from exports/imports.
+ - Remote writes are queued and retried.
+ - On startup, do a pull/merge/push.
+ 
+ ### 7) UI changes
+ - Settings: add a "Hosted Sync" section with status, last sync, errors.
+ - Diagnostics: add `remoteStatus`, last sync timestamp, and conflict count.
+@@ -317,41 +274,14 @@ If you must avoid local persistence entirely:
+ 
+ I do not recommend this unless you explicitly accept these tradeoffs.
+ 
+-## Recommended next steps
+-1) Confirm interpretation (Option A vs Option B).
+-2) If Option B: implement hybrid sync adapter, keep IDB cache, add server endpoints.
+-3) Decide identity model (passphrase-only vs token vs accounts).
+-
+----
+-
+-## Spec update draft (minimal changes needed)
+-If you want hosted sync while keeping offline:
+-- Update v4 spec to say: "Offline-first local cache + hosted sync target."
+-- Add `settings.sync = { enabled, serverUrl, passphrase?, lastSyncTs, status }`.
+-- Add `meta.remoteStatus` and `meta.lastSyncTs`.
+-- Add "Hosted sync" section in README.
+-- Update QA checklist to include offline queue + sync.
+-
+----
+-
+-## Implementation task list (file-by-file plan)
+-
+-This assumes **Option B (hybrid local cache + hosted sync)**. If Option A is chosen, this list is shorter but includes larger UX tradeoffs.
++## Recommended next steps
++1) Implement the **incremental** same-origin sync API (`/api/sync/v1/*`) and return `Cache-Control: no-store`.
++2) Add `remoteAdapter` + persistent outbox + pull/merge/push replicator.
++3) Update Diagnostics + Settings (sync status, copy/paste Sync Link, reset).
++4) Add multi-device E2E coverage (two browser profiles).
++
++---
++
++## Implementation task list (file-by-file plan)
++
++This assumes the **default hybrid model** (local cache + hosted sync).
+ 
+ ### 1) Storage adapters
+ - `storage/adapter.js`
+@@ -359,7 +289,6 @@ This assumes **Option B (hybrid local cache + hosted sync)**. If Option A is ch
+   - Add `remoteAdapter` (new file) and `syncAdapter` (new file).
+   - Extend `resolveAdapter()` to choose `syncAdapter` when hosted sync is enabled.
+-  - Add new storage mode: `\"hosted\"`.
+   - Propagate remote status into meta (see below).
+ 
+ - `storage/remote.js` (new)
+@@ -380,11 +309,11 @@ This assumes **Option B (hybrid local cache + hosted sync)**. If Option A is ch
+ ### 2) Meta + diagnostics
+ - `storage/meta.js`
+   - Extend `storageMode` enum to include `\"hosted\"`.
+-  - Add fields: `remoteStatus`, `remoteLastSyncTs`, `remoteLastError` (optional).
++  - Add `meta.sync` fields for status + last sync timestamps/errors.
+ 
+ - `ui/elements.js` / `index.html` / `ui/legacy.js`
+   - Add Diagnostics rows for hosted sync status + last sync time.
+@@ -393,15 +322,15 @@ This assumes **Option B (hybrid local cache + hosted sync)**. If Option A is ch
+ 
+ ### 3) Settings / UX for hosted sync
+ - `ui/legacy.js` (Settings tab)
+-  - Add UI controls: \"Enable hosted sync\" toggle, passphrase prompt (if E2EE), sync status display, \"Sync now\" button.
+-  - Store config in settings (e.g., `settings.sync = { enabled, serverUrl?, mode, lastSyncTs }`).
++  - Add UI controls: sync status display, **Sync now** button, **Copy/Paste Sync Link**, **Reset sync space**, and optional **E2EE** passphrase prompt.
++  - Store non-secret config in settings (e.g., `settings.sync = { mode, endpoint, spaceId, encryption, ... }`); keep credentials in a non-exported store.
+ 
+ - `app.js`
+   - Ensure settings change triggers `storageAdapter` to re-resolve (or reload).
+   - Provide actions for manual sync + status refresh.
+@@ -411,7 +340,7 @@ This assumes **Option B (hybrid local cache + hosted sync)**. If Option A is ch
+ - Reuse `storage/encrypted_export.js` to encrypt payloads.
+   - Store encrypted blobs on server.
+   - Client decrypts on load.
+-  - Add `settings.sync.encryption = \"required\"` or similar.
++  - Set `settings.sync.encryption = \"e2ee\"` and require a passphrase entry at runtime.
+ 
+ ### 5) Merge + conflict handling
+ - Use existing `mergeDay`, `mergeRosters`, `mergeInsightsState`.
+@@ -443,5 +372,5 @@ This assumes **Option B (hybrid local cache + hosted sync)**. If Option A is ch
+ 
+ ### 8) Docs
+-- Update `Solar Log v4 Implementation.md` and `README.md` once invariants are approved.
++- Ensure `Solar Log v4 Implementation.md`, `README.md`, and `qa.md` stay aligned with hosted sync defaults.
+ - Add `docs/hosted-sync-setup.md` with deployment instructions.
+diff --git a/qa.md b/qa.md
+index eca49df..a1b1c51 100644
+--- a/qa.md
++++ b/qa.md
+@@ -4,7 +4,8 @@ This plan translates the v4 spec QA checklist into concrete, repeatable manual
+ 
+ ## Test setup
+ - Run locally: `python3 -m http.server 5173`
+ - Open `http://localhost:5173/` and install as PWA if supported.
++- **Hosted sync default:** if `/api/sync/v1/*` is not available (static server), the app should fall back to local-only mode; for full hosted-sync QA, run against a dev server that implements the sync API.
+ - Use a clean profile or clear storage before starting if you need a baseline.
+ 
+ ## Automated e2e (optional)
+@@ -37,10 +38,27 @@ This plan translates the v4 spec QA checklist into concrete, repeatable manual t
+   - Storage mode is `idb` when available, else `localStorage`.
+   - Persistent storage status shows `granted/denied/unknown`.
+   - Schema/App version and Install ID are populated.
++  - Sync status shows `idle/syncing/offline/error` and pending outbox count when applicable.
+ - Create a manual snapshot; verify it appears in the list.
+ - Restore a snapshot and confirm the UI updates to that state.
+ - Delete a snapshot and confirm it disappears from the list/count.
+ 
++
++## 4b) Hosted sync (default)
++*(Requires a write-capable same-origin sync API. If unavailable, verify the app stays usable in local-only fallback.)*
++
++- Open Settings → Sync:
++  - Confirm status is **Idle** when online.
++  - Confirm “Copy Sync Link” produces a link/token.
++- Go offline:
++  - Make several edits (log chips + notes).
++  - Confirm app remains usable and status is **Offline** (or shows queued ops).
++- Go back online:
++  - Confirm outbox drains and status returns to **Idle**.
++- Multi-device sanity (manual):
++  - In a separate browser profile/device, paste the Sync Link.
++  - Confirm recent edits appear after sync.
++
+ ## 5) Import/Export + snapshots
+ - Export JSON and ensure the file contains version/meta/rosters/logs.
+ - Export **encrypted JSON**, then import with the correct passphrase.
+
