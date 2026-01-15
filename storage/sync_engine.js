@@ -139,21 +139,35 @@ export function createSyncEngine(opts){
     if(client) return client;
     const settings = getState()?.settings || {};
     const endpoint = settings?.sync?.endpoint || "/api/sync/v1";
+    const isDefaultEndpoint = !settings?.sync?.endpoint || settings?.sync?.endpoint === "/api/sync/v1";
+
     if(!creds){
       creds = await storageAdapter.getSyncCredentials?.();
     }
     if((!creds || !creds.authToken) && settings?.sync?.mode === "hosted"){
+      // If we are on the default endpoint and have no credentials, 
+      // we only attempt to create a space if the user hasn't seen a 405/404 before.
+      // For now, we try once and if it fails with 404/405 on default endpoint, we go silent.
       const temp = createRemoteClient(endpoint, {});
-      const res = await temp.createSpace();
-      if(res.ok && res.data && res.data.spaceId && res.data.authToken){
-        creds = { ...(creds || {}), spaceId: res.data.spaceId, authToken: res.data.authToken, recordMeta: creds?.recordMeta || {}, lastHlc: creds?.lastHlc || "" };
-        await storageAdapter.saveSyncCredentials?.(creds);
-        onAudit("sync_space_created", "Sync space created.", "info");
-      }else{
-        throw new Error("Failed to create sync space");
+      try {
+        const res = await temp.createSpace();
+        if(res.ok && res.data && res.data.spaceId && res.data.authToken){
+          creds = { ...(creds || {}), spaceId: res.data.spaceId, authToken: res.data.authToken, recordMeta: creds?.recordMeta || {}, lastHlc: creds?.lastHlc || "" };
+          await storageAdapter.saveSyncCredentials?.(creds);
+          onAudit("sync_space_created", "Sync space created.", "info");
+        }else{
+          if (isDefaultEndpoint && (res.status === 405 || res.status === 404)) {
+            throw new Error("SYNC_UNAVAILABLE_SILENT");
+          }
+          throw new Error("Failed to create sync space");
+        }
+      } catch (e) {
+        if (isDefaultEndpoint) throw new Error("SYNC_UNAVAILABLE_SILENT");
+        throw e;
       }
     }
     if(!creds || !creds.authToken){
+      if (isDefaultEndpoint) throw new Error("SYNC_UNAVAILABLE_SILENT");
       throw new Error("Sync credentials missing");
     }
     client = createRemoteClient(endpoint, creds);
@@ -320,6 +334,13 @@ export function createSyncEngine(opts){
     if(leader && !leader.isLeader()){
       return;
     }
+
+    const settings = getState()?.settings || {};
+    if(settings?.sync?.mode !== "hosted"){
+      updateSyncMeta({ status: "idle" });
+      return;
+    }
+
     syncing = true;
     pendingSync = false;
     try{
@@ -335,6 +356,12 @@ export function createSyncEngine(opts){
       updateSyncMeta({ status: "idle", lastSyncTs: nowIso(), lastError: "" });
       backoffMs = 1000;
     }catch(e){
+      if (e.message === "SYNC_UNAVAILABLE_SILENT") {
+        updateSyncMeta({ status: "idle", lastError: "" });
+        // No backoff retry for silent failures
+        syncing = false;
+        return;
+      }
       updateSyncMeta({ status: isOnline() ? "error" : "offline", lastError: e?.message || String(e) });
       backoffMs = Math.min(backoffMs * 2, 60000);
       scheduleSync(backoffMs + Math.floor(Math.random() * 500));
