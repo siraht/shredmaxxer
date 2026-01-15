@@ -36,6 +36,8 @@ import {
 
 export function createLegacyUI(ctx) {
   const { els, helpers, actions, defaults } = ctx;
+  const appRoot = (typeof document !== "undefined") ? document.getElementById("app") : null;
+  const ROUTE_TABS = new Set(["today", "history", "review", "settings"]);
   const {
     parseTimeToMinutes,
     minutesToTime,
@@ -1311,6 +1313,10 @@ export function createLegacyUI(ctx) {
   }
 
   function renderActive() {
+    const route = appRoot?.dataset?.route;
+    if (route && ROUTE_TABS.has(route) && route !== activeTab) {
+      activeTab = route;
+    }
     applyUiPreferences();
     applyHomeRedaction();
     renderSyncStatus();
