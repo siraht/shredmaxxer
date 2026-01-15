@@ -62,6 +62,8 @@ export function createSyncEngine(opts){
   let backoffMs = 1000;
   let pendingSync = false;
   let signalChannel = null;
+  let defaultEndpointUnavailable = false;
+  let lastEndpoint = "";
   const onOnline = () => scheduleSync(0);
 
   function updateSyncMeta(patch){
@@ -140,6 +142,15 @@ export function createSyncEngine(opts){
     const settings = getState()?.settings || {};
     const endpoint = settings?.sync?.endpoint || "/api/sync/v1";
     const isDefaultEndpoint = !settings?.sync?.endpoint || settings?.sync?.endpoint === "/api/sync/v1";
+    if(endpoint !== lastEndpoint){
+      lastEndpoint = endpoint;
+      defaultEndpointUnavailable = false;
+      client = null;
+    }
+
+    if(isDefaultEndpoint && defaultEndpointUnavailable){
+      throw new Error("SYNC_UNAVAILABLE_SILENT");
+    }
 
     if(!creds){
       creds = await storageAdapter.getSyncCredentials?.();
@@ -149,25 +160,21 @@ export function createSyncEngine(opts){
       // we only attempt to create a space if the user hasn't seen a 405/404 before.
       // For now, we try once and if it fails with 404/405 on default endpoint, we go silent.
       const temp = createRemoteClient(endpoint, {});
-      try {
-        const res = await temp.createSpace();
-        if(res.ok && res.data && res.data.spaceId && res.data.authToken){
-          creds = { ...(creds || {}), spaceId: res.data.spaceId, authToken: res.data.authToken, recordMeta: creds?.recordMeta || {}, lastHlc: creds?.lastHlc || "" };
-          await storageAdapter.saveSyncCredentials?.(creds);
-          onAudit("sync_space_created", "Sync space created.", "info");
-        }else{
-          if (isDefaultEndpoint && (res.status === 405 || res.status === 404)) {
-            throw new Error("SYNC_UNAVAILABLE_SILENT");
-          }
-          throw new Error("Failed to create sync space");
+      const res = await temp.createSpace();
+      if(res.ok && res.data && res.data.spaceId && res.data.authToken){
+        creds = { ...(creds || {}), spaceId: res.data.spaceId, authToken: res.data.authToken, recordMeta: creds?.recordMeta || {}, lastHlc: creds?.lastHlc || "" };
+        await storageAdapter.saveSyncCredentials?.(creds);
+        onAudit("sync_space_created", "Sync space created.", "info");
+      }else{
+        if (isDefaultEndpoint && (res.status === 405 || res.status === 404)) {
+          defaultEndpointUnavailable = true;
+          throw new Error("SYNC_UNAVAILABLE_SILENT");
         }
-      } catch (e) {
-        if (isDefaultEndpoint) throw new Error("SYNC_UNAVAILABLE_SILENT");
-        throw e;
+        throw new Error("Failed to create sync space");
       }
     }
     if(!creds || !creds.authToken){
-      if (isDefaultEndpoint) throw new Error("SYNC_UNAVAILABLE_SILENT");
+      if (isDefaultEndpoint && defaultEndpointUnavailable) throw new Error("SYNC_UNAVAILABLE_SILENT");
       throw new Error("Sync credentials missing");
     }
     client = createRemoteClient(endpoint, creds);
